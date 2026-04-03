@@ -1,0 +1,8 @@
+[book]
+title = "dWallet Developer Guide"
+authors = ["dWallet Labs"]
+language = "en"
+src = "src"
+
+[output.html]
+git-repository-url = "https://github.com/dwallet-labs/ika-pre-alpha"

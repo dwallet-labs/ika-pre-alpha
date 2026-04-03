@@ -1,0 +1,100 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #06080d;
+  --color-surface: #0c1019;
+  --color-elevated: #131a28;
+  --color-border: #1e293b;
+  --color-border-active: #334155;
+  --color-text: #e2e8f0;
+  --color-dim: #64748b;
+  --color-muted: #334155;
+  --color-cyan: #22d3ee;
+  --color-cyan-dim: rgba(34, 211, 238, 0.12);
+  --color-gold: #f59e0b;
+  --color-gold-dim: rgba(245, 158, 11, 0.1);
+  --color-green: #10b981;
+  --color-green-dim: rgba(16, 185, 129, 0.1);
+  --color-red: #ef4444;
+  --color-red-dim: rgba(239, 68, 68, 0.08);
+  --color-accent: #22d3ee;
+}
+
+body {
+  margin: 0;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle grain */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.015'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.mono { font-family: 'Fira Code', monospace; }
+
+input, textarea {
+  font-family: 'Fira Code', monospace;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-cyan);
+  padding: 10px 14px;
+  font-size: 13px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+input:focus, textarea:focus {
+  border-color: var(--color-cyan);
+  box-shadow: 0 0 0 1px var(--color-cyan-dim), 0 0 16px var(--color-cyan-dim);
+}
+input::placeholder, textarea::placeholder { color: var(--color-muted); }
+
+button {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 10px 20px;
+  border: 1px solid;
+  transition: all 0.2s;
+}
+button:disabled { opacity: 0.25; cursor: not-allowed; }
+button:not(:disabled):active { transform: scale(0.98); }
+
+.wallet-adapter-button {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  border-radius: 0 !important;
+  background: var(--color-elevated) !important;
+  border: 1px solid var(--color-cyan) !important;
+  color: var(--color-cyan) !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  font-weight: 600 !important;
+}
+.wallet-adapter-button:hover {
+  background: var(--color-cyan-dim) !important;
+  box-shadow: 0 0 20px var(--color-cyan-dim) !important;
+}
+
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border-active); }
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.anim-in { animation: fade-in 0.25s ease-out; }

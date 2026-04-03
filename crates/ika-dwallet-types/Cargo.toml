@@ -1,0 +1,12 @@
+[package]
+name = "ika-dwallet-types"
+version = "0.1.0"
+authors = ["dWallet Labs"]
+license = "BSD-3-Clause-Clear"
+publish = false
+edition = "2024"
+description = "BCS-serializable request/response types for gRPC dWallet operations"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+bcs = "0.1"

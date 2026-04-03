@@ -1,0 +1,32 @@
+# Rust
+target/
+Cargo.lock
+**/*.rs.bk
+
+# Solana
+test-ledger/
+.ika-dwallet-mock/
+
+# Node
+node_modules/
+dist/
+.turbo/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keys (don't commit real keys)
+keys/*.json
+!keys/README.md
+
+# Env
+.env
+.env.local

@@ -1,0 +1,7 @@
+{
+  "name": "@ika/solana-pre-alpha",
+  "private": true,
+  "scripts": {
+    "generate-clients": "bun scripts/generate-clients.ts"
+  }
+}

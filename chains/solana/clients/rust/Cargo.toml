@@ -1,0 +1,17 @@
+[package]
+name = "ika-system-client"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish.workspace = true
+edition.workspace = true
+
+[dependencies]
+borsh = { workspace = true }
+solana-pubkey = { workspace = true, features = ["borsh"] }
+solana-instruction = { workspace = true }
+num-derive = { workspace = true }
+num-traits = { workspace = true }
+
+[lints]
+workspace = true
