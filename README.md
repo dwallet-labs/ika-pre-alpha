@@ -20,6 +20,14 @@ Public developer SDK for building Solana programs that integrate with [Ika dWall
 | `proto/` | Protobuf definitions |
 | `docs/` | Developer documentation (mdbook) |
 
+## Devnet
+
+| Resource | Endpoint |
+|----------|----------|
+| **dWallet gRPC** | `https://pre-alpha-dev-1.ika.ika-network.net:443` |
+| **Solana RPC** | `https://api.devnet.solana.com` |
+| **Program ID** | `87W54kGYFQ1rgWqMeu4XTPHWXWmXSQCcjm8vCTfiq1oY` |
+
 ## Quick Start
 
 ```bash

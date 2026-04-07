@@ -50,6 +50,6 @@ ika-sdk-types = { package = "ika-solana-sdk-types", git = "https://github.com/dw
 |----------|----------|
 | **dWallet gRPC** | `https://pre-alpha-dev-1.ika.ika-network.net:443` |
 | **Solana RPC** | `https://api.devnet.solana.com` |
-| **Program ID** | `TODO: will be updated after deployment` |
+| **Program ID** | `87W54kGYFQ1rgWqMeu4XTPHWXWmXSQCcjm8vCTfiq1oY` |
 
 No local validator or MPC node setup needed -- just connect to devnet and start building.

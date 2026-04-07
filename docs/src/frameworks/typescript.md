@@ -35,7 +35,7 @@ import {
 
 const RPC_URL = "https://api.devnet.solana.com";
 const WS_URL = "wss://api.devnet.solana.com";
-const DWALLET_PROGRAM = address("TODO: program ID after deployment");
+const DWALLET_PROGRAM = address("87W54kGYFQ1rgWqMeu4XTPHWXWmXSQCcjm8vCTfiq1oY");
 
 const rpc = createSolanaRpc(RPC_URL);
 const rpcSubscriptions = createSolanaRpcSubscriptions(WS_URL);
