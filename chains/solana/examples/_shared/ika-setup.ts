@@ -206,6 +206,31 @@ function grpcSubmitTransaction(
   });
 }
 
+/**
+ * Build the dWallet PDA seed list for `find_program_address`.
+ *
+ * Mirrors `ika_dwallet_program::state::dwallet::DWalletPdaSeeds::new`:
+ * concatenate `curve_byte || public_key` into a single buffer and split
+ * it into 32-byte chunks (Solana's `MAX_SEED_LEN`). Each chunk becomes
+ * its own seed. The total seed count varies by pubkey length but stays
+ * well under `MAX_SEEDS = 16`.
+ *
+ *   - 32-byte pubkey (Ed25519/Curve25519/Ristretto): payload 33 → [32, 1]
+ *   - 33-byte pubkey (compressed Secp256k1/r1):      payload 34 → [32, 2]
+ *   - 65-byte pubkey (uncompressed SEC1):            payload 66 → [32, 32, 2]
+ */
+function dwalletPdaSeeds(curve: number, publicKey: Uint8Array): Buffer[] {
+  const payload = Buffer.alloc(1 + publicKey.length);
+  payload[0] = curve;
+  Buffer.from(publicKey).copy(payload, 1);
+
+  const seeds: Buffer[] = [SEED_DWALLET];
+  for (let i = 0; i < payload.length; i += 32) {
+    seeds.push(payload.subarray(i, Math.min(i + 32, payload.length)));
+  }
+  return seeds;
+}
+
 function buildUserSignature(payer: Keypair): Uint8Array {
   return UserSignature.serialize({
     Ed25519: {
@@ -303,8 +328,13 @@ export async function setupDWallet(
   val("Public key", Buffer.from(publicKey).toString("hex"));
 
   // Poll for dWallet PDA on-chain.
+  //
+  // Seeds = ["dwallet", chunks_of(curve || pubkey)] — concatenate the
+  // curve byte with the raw pubkey into a single buffer and split it
+  // into 32-byte chunks (Solana's MAX_SEED_LEN), passing each chunk as
+  // its own seed. Mirrors the on-chain `DWalletPdaSeeds::new`.
   const [dwalletPda] = pda(
-    [SEED_DWALLET, Buffer.from([CURVE_CURVE25519]), Buffer.from(publicKey)],
+    dwalletPdaSeeds(CURVE_CURVE25519, publicKey),
     dwalletProgramId,
   );
 

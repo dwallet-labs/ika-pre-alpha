@@ -43,9 +43,8 @@ const SYSTEM_PROGRAM_ID: Pubkey = Pubkey::new_from_array([0u8; 32]);
 
 /// The dWallet program ID (must match the hardcoded `crate::ID` in the program).
 const DWALLET_PROGRAM_ID: Pubkey = Pubkey::new_from_array([
-    0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c,
-    0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c,
-    0x0c, 0x01,
+    0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c,
+    0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x01,
 ]);
 
 /// CPI authority PDA seed (must match the dWallet program).
@@ -284,11 +283,18 @@ impl DWalletTestContext {
         public_key_len: u8,
         public_key: &[u8],
     ) -> Pubkey {
+        // PDA seeds = ["dwallet", chunks_of(curve || pubkey)] where the
+        // `curve || pubkey` payload is split into 32-byte chunks (Solana's
+        // `MAX_SEED_LEN`). Mirrors the on-chain `DWalletPdaSeeds::new`.
         let actual_key = &public_key[..public_key_len as usize];
-        let (dwallet_pda, dwallet_bump) = Pubkey::find_program_address(
-            &[b"dwallet", &[curve], actual_key],
-            &self.dwallet_program_id,
-        );
+        let payload = pack_dwallet_seed_payload(curve, actual_key);
+        let mut seeds: Vec<&[u8]> = Vec::with_capacity(4);
+        seeds.push(b"dwallet");
+        for chunk in payload.chunks(32) {
+            seeds.push(chunk);
+        }
+        let (dwallet_pda, dwallet_bump) =
+            Pubkey::find_program_address(&seeds, &self.dwallet_program_id);
 
         let noa_pubkey = keypair_pubkey(&self.noa_keypair);
         let mut pk_array = [0u8; 65];
@@ -502,11 +508,15 @@ fn test_voting_full_lifecycle() {
     ctx.transfer_dwallet(&dwallet, &authority_keypair, &cpi_authority);
 
     // Verify transfer.
-    let dw_data = ctx.get_account_data(&dwallet).expect("dWallet should exist");
-    let stored_authority = Pubkey::new_from_array(
-        dw_data[DW_AUTHORITY..DW_AUTHORITY + 32].try_into().unwrap(),
+    let dw_data = ctx
+        .get_account_data(&dwallet)
+        .expect("dWallet should exist");
+    let stored_authority =
+        Pubkey::new_from_array(dw_data[DW_AUTHORITY..DW_AUTHORITY + 32].try_into().unwrap());
+    assert_eq!(
+        stored_authority, cpi_authority,
+        "dWallet authority should be CPI authority PDA"
     );
-    assert_eq!(stored_authority, cpi_authority, "dWallet authority should be CPI authority PDA");
 
     // Create proposal.
     let proposal_id = [0x01u8; 32];
@@ -545,7 +555,9 @@ fn test_voting_full_lifecycle() {
     ctx.send_tx(&[&payer_ref, &creator], &[create_proposal_ix]);
 
     // Verify proposal created.
-    let prop_data = ctx.get_account_data(&proposal_pda).expect("proposal should exist");
+    let prop_data = ctx
+        .get_account_data(&proposal_pda)
+        .expect("proposal should exist");
     assert_eq!(prop_data.len(), PROPOSAL_LEN, "proposal account length");
     assert_eq!(
         &prop_data[PROP_PROPOSAL_ID..PROP_PROPOSAL_ID + 32],
@@ -561,16 +573,24 @@ fn test_voting_full_lifecycle() {
 
     // Vote 1.
     cast_vote_no_cpi(
-        &mut ctx, &voting_program_id, &proposal_pda, &voter_one,
-        proposal_id, cpi_authority_bump,
+        &mut ctx,
+        &voting_program_id,
+        &proposal_pda,
+        &voter_one,
+        proposal_id,
+        cpi_authority_bump,
     );
     let prop_data = ctx.get_account_data(&proposal_pda).unwrap();
     assert_eq!(read_u32(&prop_data, PROP_YES_VOTES), 1, "yes_votes = 1");
 
     // Vote 2.
     cast_vote_no_cpi(
-        &mut ctx, &voting_program_id, &proposal_pda, &voter_two,
-        proposal_id, cpi_authority_bump,
+        &mut ctx,
+        &voting_program_id,
+        &proposal_pda,
+        &voter_two,
+        proposal_id,
+        cpi_authority_bump,
     );
     let prop_data = ctx.get_account_data(&proposal_pda).unwrap();
     assert_eq!(read_u32(&prop_data, PROP_YES_VOTES), 2, "yes_votes = 2");
@@ -608,19 +628,28 @@ fn test_voting_full_lifecycle() {
     // Verify proposal approved.
     let prop_data = ctx.get_account_data(&proposal_pda).unwrap();
     assert_eq!(read_u32(&prop_data, PROP_YES_VOTES), 3, "yes_votes = 3");
-    assert_eq!(prop_data[PROP_STATUS], STATUS_APPROVED, "status should be Approved");
+    assert_eq!(
+        prop_data[PROP_STATUS], STATUS_APPROVED,
+        "status should be Approved"
+    );
 
     // Verify MessageApproval PDA created.
     let ma_data = ctx
         .get_account_data(&message_approval_pda)
         .expect("MessageApproval PDA should exist after quorum");
-    assert_eq!(ma_data.len(), MESSAGE_APPROVAL_LEN, "MessageApproval account length");
-    assert_eq!(ma_data[0], DISC_MESSAGE_APPROVAL, "MessageApproval discriminator");
+    assert_eq!(
+        ma_data.len(),
+        MESSAGE_APPROVAL_LEN,
+        "MessageApproval account length"
+    );
+    assert_eq!(
+        ma_data[0], DISC_MESSAGE_APPROVAL,
+        "MessageApproval discriminator"
+    );
     assert_eq!(ma_data[1], 1, "MessageApproval version");
 
-    let ma_dwallet = Pubkey::new_from_array(
-        ma_data[MA_DWALLET..MA_DWALLET + 32].try_into().unwrap(),
-    );
+    let ma_dwallet =
+        Pubkey::new_from_array(ma_data[MA_DWALLET..MA_DWALLET + 32].try_into().unwrap());
     assert_eq!(ma_dwallet, dwallet, "MA.dwallet");
 
     let ma_message_hash: [u8; 32] = ma_data[MA_MESSAGE_HASH..MA_MESSAGE_HASH + 32]
@@ -628,10 +657,12 @@ fn test_voting_full_lifecycle() {
         .unwrap();
     assert_eq!(ma_message_hash, message_hash, "MA.message_hash");
 
-    let ma_approver = Pubkey::new_from_array(
-        ma_data[MA_APPROVER..MA_APPROVER + 32].try_into().unwrap(),
+    let ma_approver =
+        Pubkey::new_from_array(ma_data[MA_APPROVER..MA_APPROVER + 32].try_into().unwrap());
+    assert_eq!(
+        ma_approver, cpi_authority,
+        "MA.approver should be CPI authority PDA"
     );
-    assert_eq!(ma_approver, cpi_authority, "MA.approver should be CPI authority PDA");
 
     let ma_user_pubkey: [u8; 32] = ma_data[MA_USER_PUBKEY..MA_USER_PUBKEY + 32]
         .try_into()
@@ -639,7 +670,10 @@ fn test_voting_full_lifecycle() {
     assert_eq!(ma_user_pubkey, user_pubkey, "MA.user_pubkey");
 
     assert_eq!(ma_data[MA_SIGNATURE_SCHEME], 0, "MA.signature_scheme");
-    assert_eq!(ma_data[MA_STATUS], MA_STATUS_PENDING, "MA.status should be Pending");
+    assert_eq!(
+        ma_data[MA_STATUS], MA_STATUS_PENDING,
+        "MA.status should be Pending"
+    );
 }
 
 /// Test that voting below quorum does NOT create a MessageApproval account.
@@ -691,12 +725,20 @@ fn test_voting_below_quorum_no_approval() {
     let voter_two = ctx.new_funded_keypair();
 
     cast_vote_no_cpi(
-        &mut ctx, &voting_program_id, &proposal_pda, &voter_one,
-        proposal_id, cpi_authority_bump,
+        &mut ctx,
+        &voting_program_id,
+        &proposal_pda,
+        &voter_one,
+        proposal_id,
+        cpi_authority_bump,
     );
     cast_vote_no_cpi(
-        &mut ctx, &voting_program_id, &proposal_pda, &voter_two,
-        proposal_id, cpi_authority_bump,
+        &mut ctx,
+        &voting_program_id,
+        &proposal_pda,
+        &voter_two,
+        proposal_id,
+        cpi_authority_bump,
     );
 
     let prop_data = ctx.get_account_data(&proposal_pda).unwrap();
@@ -784,7 +826,10 @@ fn test_no_votes_dont_trigger_quorum() {
     }
 
     let prop_data = ctx.get_account_data(&proposal_pda).unwrap();
-    assert_eq!(prop_data[PROP_STATUS], STATUS_OPEN, "status should still be Open");
+    assert_eq!(
+        prop_data[PROP_STATUS], STATUS_OPEN,
+        "status should still be Open"
+    );
     assert_eq!(read_u32(&prop_data, PROP_YES_VOTES), 0, "yes_votes = 0");
     assert_eq!(read_u32(&prop_data, PROP_NO_VOTES), 3, "no_votes = 3");
 
@@ -832,4 +877,16 @@ fn cast_vote_no_cpi(
     );
 
     ctx.send_tx(&[&payer_ref, voter], &[ix]);
+}
+
+/// Pack `curve || public_key` into a single buffer for dWallet PDA seeds.
+///
+/// Mirrors `ika_dwallet_program::state::dwallet::DWalletPdaSeeds::new`:
+/// callers split the returned buffer into 32-byte chunks and pass each
+/// chunk as a separate seed to `find_program_address`.
+fn pack_dwallet_seed_payload(curve: u8, public_key: &[u8]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(1 + public_key.len());
+    buf.push(curve);
+    buf.extend_from_slice(public_key);
+    buf
 }

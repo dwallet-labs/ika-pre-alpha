@@ -37,8 +37,8 @@ use solana_sdk::system_program;
 use solana_sdk::transaction::Transaction;
 
 use ika_dwallet_types::*;
-use ika_grpc::d_wallet_service_client::DWalletServiceClient;
 use ika_grpc::UserSignedRequest;
+use ika_grpc::d_wallet_service_client::DWalletServiceClient;
 
 // ======================================================================
 // ANSI colors
@@ -96,12 +96,19 @@ const PROP_STATUS: usize = 175;
 
 fn load_payer() -> Keypair {
     let path = env::var("PAYER_KEYPAIR").unwrap_or_else(|_| {
-        format!("{}/.config/solana/devnet-admin.json", env::var("HOME").unwrap_or_default())
+        format!(
+            "{}/.config/solana/devnet-admin.json",
+            env::var("HOME").unwrap_or_default()
+        )
     });
-    let data = std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("Cannot read keypair at {path}"));
+    let data =
+        std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("Cannot read keypair at {path}"));
     let bytes: Vec<u8> = {
         let s = data.trim();
-        s[1..s.len()-1].split(',').map(|v| v.trim().parse::<u8>().unwrap()).collect()
+        s[1..s.len() - 1]
+            .split(',')
+            .map(|v| v.trim().parse::<u8>().unwrap())
+            .collect()
     };
     #[allow(deprecated)]
     Keypair::from_bytes(&bytes).expect("valid keypair")
@@ -124,7 +131,9 @@ fn send_tx(
     let mut signers: Vec<&Keypair> = vec![payer];
     signers.extend_from_slice(extra);
     let tx = Transaction::new_signed_with_payer(&ixs, Some(&payer.pubkey()), &signers, blockhash);
-    client.send_and_confirm_transaction(&tx).expect("send_and_confirm")
+    client
+        .send_and_confirm_transaction(&tx)
+        .expect("send_and_confirm")
 }
 
 fn poll_until(
@@ -185,7 +194,8 @@ async fn main() {
 
     let dwallet_program_id = Pubkey::from_str(&args[1]).expect("invalid dWallet program ID");
     let voting_program_id = Pubkey::from_str(&args[2]).expect("invalid voting program ID");
-    let grpc_url = env::var("GRPC_URL").unwrap_or_else(|_| "https://pre-alpha-dev-1.ika.ika-network.net:443".to_string());
+    let grpc_url = env::var("GRPC_URL")
+        .unwrap_or_else(|_| "https://pre-alpha-dev-1.ika.ika-network.net:443".to_string());
 
     let client = RpcClient::new_with_commitment(
         env::var("RPC_URL").unwrap_or_else(|_| "https://api.devnet.solana.com".to_string()),
@@ -193,7 +203,9 @@ async fn main() {
     );
 
     println!();
-    println!("{BOLD}\u{2550}\u{2550}\u{2550} dWallet Voting E2E Demo \u{2550}\u{2550}\u{2550}{RESET}");
+    println!(
+        "{BOLD}\u{2550}\u{2550}\u{2550} dWallet Voting E2E Demo \u{2550}\u{2550}\u{2550}{RESET}"
+    );
     println!();
     val("dWallet program", dwallet_program_id);
     val("Voting program", voting_program_id);
@@ -204,7 +216,11 @@ async fn main() {
     log("Setup", "Funding payer...");
     let payer = load_payer();
     let balance = client.get_balance(&payer.pubkey()).unwrap_or(0);
-    ok(&format!("Payer: {} ({:.3} SOL)", payer.pubkey(), balance as f64 / 1e9));
+    ok(&format!(
+        "Payer: {} ({:.3} SOL)",
+        payer.pubkey(),
+        balance as f64 / 1e9
+    ));
 
     log("Setup", "Waiting for mock to initialize program state...");
 
@@ -223,8 +239,11 @@ async fn main() {
     let nek_accounts: Vec<(Pubkey, Account)> = {
         let start = Instant::now();
         loop {
-            let accs = client.get_program_accounts(&dwallet_program_id).unwrap_or_default();
-            let neks: Vec<_> = accs.into_iter()
+            let accs = client
+                .get_program_accounts(&dwallet_program_id)
+                .unwrap_or_default();
+            let neks: Vec<_> = accs
+                .into_iter()
                 .filter(|(_, a)| a.data.len() >= NEK_LEN && a.data[0] == DISC_NEK)
                 .collect();
             if !neks.is_empty() {
@@ -246,40 +265,57 @@ async fn main() {
     // Step 1: gRPC DKG
     // ===================================================================
 
-    log("1/7", "Requesting DKG via gRPC (mock commits + transfers on-chain)...");
+    log(
+        "1/7",
+        "Requesting DKG via gRPC (mock commits + transfers on-chain)...",
+    );
 
     let mut grpc_client = if grpc_url.starts_with("https") {
         let tls = tonic::transport::ClientTlsConfig::new().with_native_roots();
         let channel = tonic::transport::Channel::from_shared(grpc_url.clone())
-            .expect("valid URL").tls_config(tls).expect("tls")
-            .connect().await.expect("connect to gRPC");
+            .expect("valid URL")
+            .tls_config(tls)
+            .expect("tls")
+            .connect()
+            .await
+            .expect("connect to gRPC");
         DWalletServiceClient::new(channel)
     } else {
-        DWalletServiceClient::connect(grpc_url.clone()).await.expect("connect to gRPC")
+        DWalletServiceClient::connect(grpc_url.clone())
+            .await
+            .expect("connect to gRPC")
     };
 
-    let dkg_request = build_grpc_request(&payer, SignedRequestData {
-        session_identifier_preimage: [0u8; 32],
-        epoch: 1,
-        chain_id: ChainId::Solana,
-        intended_chain_sender: payer.pubkey().to_bytes().to_vec(),
-        request: DWalletRequest::DKG {
-            dwallet_network_encryption_public_key: vec![0u8; 32],
-            curve: DWalletCurve::Curve25519,
-            centralized_public_key_share_and_proof: vec![0u8; 32],
-            encrypted_centralized_secret_share_and_proof: vec![0u8; 32],
-            encryption_key: vec![0u8; 32],
-            user_public_output: vec![0u8; 32],
-            signer_public_key: payer.pubkey().to_bytes().to_vec(),
+    let dkg_request = build_grpc_request(
+        &payer,
+        SignedRequestData {
+            session_identifier_preimage: [0u8; 32],
+            epoch: 1,
+            chain_id: ChainId::Solana,
+            intended_chain_sender: payer.pubkey().to_bytes().to_vec(),
+            request: DWalletRequest::DKG {
+                dwallet_network_encryption_public_key: vec![0u8; 32],
+                curve: DWalletCurve::Curve25519,
+                centralized_public_key_share_and_proof: vec![0u8; 32],
+                encrypted_centralized_secret_share_and_proof: vec![0u8; 32],
+                encryption_key: vec![0u8; 32],
+                user_public_output: vec![0u8; 32],
+                signer_public_key: payer.pubkey().to_bytes().to_vec(),
+            },
         },
-    });
+    );
 
-    let response = grpc_client.submit_transaction(dkg_request).await.expect("gRPC DKG");
+    let response = grpc_client
+        .submit_transaction(dkg_request)
+        .await
+        .expect("gRPC DKG");
     let response_data: TransactionResponseData =
         bcs::from_bytes(&response.into_inner().response_data).expect("BCS deserialize");
 
     let attestation_data = match response_data {
-        TransactionResponseData::Attestation { attestation_data, .. } => {
+        TransactionResponseData::Attestation {
+            attestation_data, ..
+        } => {
             ok("DKG attestation received");
             attestation_data
         }
@@ -294,11 +330,18 @@ async fn main() {
     val("Public key", hex::encode(&public_key));
 
     // Poll for dWallet PDA on-chain (mock committed + transferred authority to payer).
+    //
+    // PDA seeds = ["dwallet", chunks_of(curve || pubkey)] where the
+    // `curve || pubkey` payload is split into 32-byte chunks (Solana's
+    // `MAX_SEED_LEN`). Mirrors the on-chain `DWalletPdaSeeds::new`.
     let curve = CURVE_CURVE25519;
-    let (dwallet_pda, _) = Pubkey::find_program_address(
-        &[SEED_DWALLET, &[curve], &public_key],
-        &dwallet_program_id,
-    );
+    let payload = pack_dwallet_seed_payload(curve, &public_key);
+    let mut seeds: Vec<&[u8]> = Vec::with_capacity(4);
+    seeds.push(SEED_DWALLET);
+    for chunk in payload.chunks(32) {
+        seeds.push(chunk);
+    }
+    let (dwallet_pda, _) = Pubkey::find_program_address(&seeds, &dwallet_program_id);
 
     poll_until(
         &client,
@@ -321,15 +364,22 @@ async fn main() {
     transfer_data.push(IX_TRANSFER_OWNERSHIP);
     transfer_data.extend_from_slice(cpi_authority.as_ref());
 
-    send_tx(&client, &payer, vec![Instruction::new_with_bytes(
-        dwallet_program_id,
-        &transfer_data,
-        vec![
-            AccountMeta::new_readonly(payer.pubkey(), true),
-            AccountMeta::new(dwallet_pda, false),
-        ],
-    )], &[]);
-    ok(&format!("Authority transferred to CPI PDA: {cpi_authority}"));
+    send_tx(
+        &client,
+        &payer,
+        vec![Instruction::new_with_bytes(
+            dwallet_program_id,
+            &transfer_data,
+            vec![
+                AccountMeta::new_readonly(payer.pubkey(), true),
+                AccountMeta::new(dwallet_pda, false),
+            ],
+        )],
+        &[],
+    );
+    ok(&format!(
+        "Authority transferred to CPI PDA: {cpi_authority}"
+    ));
 
     // ===================================================================
     // Step 3: Create voting proposal (quorum=3)
@@ -361,17 +411,22 @@ async fn main() {
     create_proposal.push(message_approval_bump);
     create_proposal.push(proposal_bump);
 
-    send_tx(&client, &payer, vec![Instruction::new_with_bytes(
-        voting_program_id,
-        &create_proposal,
-        vec![
-            AccountMeta::new(proposal_pda, false),
-            AccountMeta::new_readonly(dwallet_pda, false),
-            AccountMeta::new_readonly(payer.pubkey(), true),
-            AccountMeta::new(payer.pubkey(), true),
-            AccountMeta::new_readonly(system_program::id(), false),
-        ],
-    )], &[]);
+    send_tx(
+        &client,
+        &payer,
+        vec![Instruction::new_with_bytes(
+            voting_program_id,
+            &create_proposal,
+            vec![
+                AccountMeta::new(proposal_pda, false),
+                AccountMeta::new_readonly(dwallet_pda, false),
+                AccountMeta::new_readonly(payer.pubkey(), true),
+                AccountMeta::new(payer.pubkey(), true),
+                AccountMeta::new_readonly(system_program::id(), false),
+            ],
+        )],
+        &[],
+    );
     ok(&format!("Proposal: {proposal_pda}"));
     val("Message", String::from_utf8_lossy(message));
     val("Quorum", quorum);
@@ -420,8 +475,13 @@ async fn main() {
         }
 
         let sig = send_tx(
-            &client, &payer,
-            vec![Instruction::new_with_bytes(voting_program_id, &cast_vote_data, accounts)],
+            &client,
+            &payer,
+            vec![Instruction::new_with_bytes(
+                voting_program_id,
+                &cast_vote_data,
+                accounts,
+            )],
             &[&voter],
         );
 
@@ -431,7 +491,10 @@ async fn main() {
         ok(&format!("{name} voted YES"));
     }
 
-    let prop_data = client.get_account(&proposal_pda).expect("read proposal").data;
+    let prop_data = client
+        .get_account(&proposal_pda)
+        .expect("read proposal")
+        .data;
     assert_eq!(read_u32_le(&prop_data, PROP_YES_VOTES), 3);
     assert_eq!(prop_data[PROP_STATUS], 1);
     ok("Proposal approved (3/3 yes)");
@@ -458,19 +521,25 @@ async fn main() {
 
     log("6/7", "Allocating presign via gRPC...");
 
-    let presign_request = build_grpc_request(&payer, SignedRequestData {
-        session_identifier_preimage: dwallet_addr,
-        epoch: 1,
-        chain_id: ChainId::Solana,
-        intended_chain_sender: payer.pubkey().to_bytes().to_vec(),
-        request: DWalletRequest::PresignForDWallet {
-            dwallet_id: dwallet_addr.to_vec(),
-            curve: DWalletCurve::Curve25519,
-            signature_algorithm: DWalletSignatureAlgorithm::EdDSA,
+    let presign_request = build_grpc_request(
+        &payer,
+        SignedRequestData {
+            session_identifier_preimage: dwallet_addr,
+            epoch: 1,
+            chain_id: ChainId::Solana,
+            intended_chain_sender: payer.pubkey().to_bytes().to_vec(),
+            request: DWalletRequest::PresignForDWallet {
+                dwallet_id: dwallet_addr.to_vec(),
+                curve: DWalletCurve::Curve25519,
+                signature_algorithm: DWalletSignatureAlgorithm::EdDSA,
+            },
         },
-    });
+    );
 
-    let presign_response = grpc_client.submit_transaction(presign_request).await.expect("presign");
+    let presign_response = grpc_client
+        .submit_transaction(presign_request)
+        .await
+        .expect("presign");
     let presign_data: TransactionResponseData =
         bcs::from_bytes(&presign_response.into_inner().response_data).expect("BCS");
 
@@ -489,26 +558,32 @@ async fn main() {
 
     log("7/8", "Sending Sign request via gRPC...");
 
-    let sign_request = build_grpc_request(&payer, SignedRequestData {
-        session_identifier_preimage: dwallet_addr,
-        epoch: 1,
-        chain_id: ChainId::Solana,
-        intended_chain_sender: payer.pubkey().to_bytes().to_vec(),
-        request: DWalletRequest::Sign {
-            message: message.to_vec(),
-            curve: DWalletCurve::Curve25519,
-            signature_algorithm: DWalletSignatureAlgorithm::EdDSA,
-            hash_scheme: DWalletHashScheme::Keccak256,
-            presign_id,
-            message_centralized_signature: vec![0u8; 64],
-            approval_proof: ApprovalProof::Solana {
-                transaction_signature: quorum_tx_sig.as_ref().to_vec(),
-                slot: 0,
+    let sign_request = build_grpc_request(
+        &payer,
+        SignedRequestData {
+            session_identifier_preimage: dwallet_addr,
+            epoch: 1,
+            chain_id: ChainId::Solana,
+            intended_chain_sender: payer.pubkey().to_bytes().to_vec(),
+            request: DWalletRequest::Sign {
+                message: message.to_vec(),
+                curve: DWalletCurve::Curve25519,
+                signature_algorithm: DWalletSignatureAlgorithm::EdDSA,
+                hash_scheme: DWalletHashScheme::Keccak256,
+                presign_id,
+                message_centralized_signature: vec![0u8; 64],
+                approval_proof: ApprovalProof::Solana {
+                    transaction_signature: quorum_tx_sig.as_ref().to_vec(),
+                    slot: 0,
+                },
             },
         },
-    });
+    );
 
-    let sign_response = grpc_client.submit_transaction(sign_request).await.expect("sign");
+    let sign_response = grpc_client
+        .submit_transaction(sign_request)
+        .await
+        .expect("sign");
     let sign_data: TransactionResponseData =
         bcs::from_bytes(&sign_response.into_inner().response_data).expect("BCS");
 
@@ -542,13 +617,31 @@ async fn main() {
     let onchain_signature = &ma_signed[MA_SIGNATURE..MA_SIGNATURE + onchain_sig_len];
 
     assert_eq!(onchain_sig_len, 64, "on-chain signature should be 64 bytes");
-    assert_eq!(onchain_signature, grpc_signature.as_slice(), "on-chain signature must match gRPC signature");
+    assert_eq!(
+        onchain_signature,
+        grpc_signature.as_slice(),
+        "on-chain signature must match gRPC signature"
+    );
     ok("Signature committed on-chain!");
     val("On-chain sig", hex::encode(onchain_signature));
     val("Status", "Signed (1)");
     val("dWallet", dwallet_pda);
 
     println!();
-    println!("{BOLD}{GREEN}\u{2550}\u{2550}\u{2550} E2E Test Passed! \u{2550}\u{2550}\u{2550}{RESET}");
+    println!(
+        "{BOLD}{GREEN}\u{2550}\u{2550}\u{2550} E2E Test Passed! \u{2550}\u{2550}\u{2550}{RESET}"
+    );
     println!();
+}
+
+/// Pack `curve || public_key` into a single buffer for dWallet PDA seeds.
+///
+/// Mirrors `ika_dwallet_program::state::dwallet::DWalletPdaSeeds::new`:
+/// callers split the returned buffer into 32-byte chunks and pass each
+/// chunk as a separate seed to `find_program_address`.
+fn pack_dwallet_seed_payload(curve: u8, public_key: &[u8]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(1 + public_key.len());
+    buf.push(curve);
+    buf.extend_from_slice(public_key);
+    buf
 }

@@ -50,11 +50,21 @@ poll_until(&client, &coordinator_pda, |data| {
 
 The NOA commits a dWallet via `CommitDWallet` (discriminator `31`):
 
+The dWallet PDA seeds are `["dwallet", chunks_of(curve_byte ‖ public_key)]` — concatenate the curve byte with the public key into a single buffer, then split into 32-byte chunks (Solana's `MAX_SEED_LEN`) and pass each chunk as its own seed. For 32-byte pubkeys (Curve25519/Ristretto/Ed25519) the payload is 33 bytes → chunks `[32, 1]`; for 33-byte compressed SEC1 pubkeys (Secp256k1/r1) it is 34 bytes → chunks `[32, 2]`.
+
 ```rust
-let (dwallet_pda, dwallet_bump) = Pubkey::find_program_address(
-    &[b"dwallet", &[curve], &public_key],
-    &dwallet_program_id,
-);
+let mut payload = Vec::with_capacity(1 + public_key.len());
+payload.push(curve);
+payload.extend_from_slice(&public_key);
+
+let mut seeds: Vec<&[u8]> = Vec::with_capacity(4);
+seeds.push(b"dwallet");
+for chunk in payload.chunks(32) {
+    seeds.push(chunk);
+}
+
+let (dwallet_pda, dwallet_bump) =
+    Pubkey::find_program_address(&seeds, &dwallet_program_id);
 ```
 
 ### Step 3: Transfer Authority
@@ -107,7 +117,7 @@ let signature = &signed_data[142..142 + sig_len];
 |-----|-------|---------|
 | DWalletCoordinator | `["dwallet_coordinator"]` | dWallet |
 | NetworkEncryptionKey | `["network_encryption_key", noa_pubkey]` | dWallet |
-| DWallet | `["dwallet", curve, public_key]` | dWallet |
+| DWallet | `["dwallet", chunks_of(curve ‖ public_key)]` (32-byte chunks) | dWallet |
 | MessageApproval | `["message_approval", dwallet, message_hash]` | dWallet |
 | CPI Authority | `["__ika_cpi_authority"]` | Your program |
 | Proposal | `["proposal", proposal_id]` | Voting |

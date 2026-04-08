@@ -187,7 +187,7 @@ const GRPC_URL = "pre-alpha-dev-1.ika.ika-network.net:443";
 | Account | Seeds |
 |---|---|
 | DWalletCoordinator | `["dwallet_coordinator"]` |
-| DWallet | `["dwallet", curve_byte, public_key_bytes]` |
+| DWallet | `["dwallet", chunks_of(curve_byte ‖ public_key)]` (32-byte chunks) |
 | MessageApproval | `["message_approval", dwallet_pubkey, message_hash]` |
 | GasDeposit | `["gas_deposit", user_pubkey]` |
 | NetworkEncryptionKey | `["network_encryption_key", noa_public_key]` |
