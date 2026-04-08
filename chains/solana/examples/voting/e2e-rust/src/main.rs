@@ -569,7 +569,7 @@ async fn main() {
                 message: message.to_vec(),
                 curve: DWalletCurve::Curve25519,
                 signature_algorithm: DWalletSignatureAlgorithm::EdDSA,
-                hash_scheme: DWalletHashScheme::Keccak256,
+                hash_scheme: DWalletHashScheme::SHA512,
                 presign_id,
                 message_centralized_signature: vec![0u8; 64],
                 approval_proof: ApprovalProof::Solana {

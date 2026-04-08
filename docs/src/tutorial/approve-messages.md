@@ -105,7 +105,9 @@ Seeds: ["message_approval", dwallet_pubkey, message_hash]
 Program: DWALLET_PROGRAM_ID
 ```
 
-> **Important:** The `message_hash` must be computed using **keccak256**. This is required for the network (or mock) to derive the same PDA when committing the signature on-chain. This convention is subject to change in future releases — the pre-alpha mock always uses keccak256 regardless of the `hash_scheme` field in the gRPC Sign request.
+> **Important:** The `message_hash` you pass to `approve_message` is the **uniqueness key for the MessageApproval PDA** and must be computed as `keccak256(preimage)` regardless of which destination chain the dWallet will eventually sign for. The dwallet program treats it as opaque 32 bytes; using the same hash function (`keccak256`, with Solana's cheap on-chain syscall) for every chain keeps the dwallet program chain-agnostic.
+>
+> The **digest the dwallet network actually signs** is a separate concern, controlled by the `hash_scheme` field on the gRPC `Sign` request. For Secp256k1 the network applies `hash_scheme(message)` and signs the resulting 32-byte digest via `sign_prehash`, so the produced signature is valid on whichever chain expects that exact hash function (`Keccak256` for EVM, `DoubleSHA256` for Bitcoin BIP143, etc.). For EVM the on-chain lookup hash and the signing digest happen to coincide; for Bitcoin they differ. The mock supports `hash_scheme` (it used to ignore it and always hash with SHA-256, which produced signatures that wouldn't verify on real EVM/Bitcoin nodes).
 
 The dWallet program verifies:
 1. The caller is a valid program (executable account)

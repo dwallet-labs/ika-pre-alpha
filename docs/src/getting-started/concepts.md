@@ -101,15 +101,41 @@ Programs that use dWallet instructions need sufficient SOL for rent. The payer a
 | EdDSA | Curve25519 | Yes |
 | SchnorrkelSubstrate | Ristretto | Not yet |
 
-| Hash Scheme | Description | Mock Support |
-|-------------|-------------|-------------|
-| Keccak256 | Ethereum, general purpose | Ignored (mock signs directly) |
-| SHA256 | Bitcoin, general purpose | Ignored (mock signs directly) |
-| DoubleSHA256 | Bitcoin transaction signing | Ignored (mock signs directly) |
-| SHA512 | Ed25519 signing | Ignored (mock signs directly) |
-| Merlin | Schnorrkel/Substrate | Ignored (mock signs directly) |
+Per-variant support depends on the signing curve. The mock requires the
+client to declare a `hash_scheme` that actually applies to the dWallet's
+curve — anything else is rejected at the gRPC layer.
 
-> **Note:** In the pre-alpha mock, `signature_algorithm` and `hash_scheme` are accepted in the BCS payload but the mock ignores them — it signs directly with the raw key. The full Ika network will enforce the correct algorithm and hash scheme.
+| Hash Scheme | Description | Secp256k1 | Ed25519 |
+|-------------|-------------|-----------|---------|
+| Keccak256    | Ethereum (EIP-1559) | ✅ Supported | ❌ Rejected |
+| SHA256       | Generic single-SHA256 | ✅ Supported | ❌ Rejected |
+| DoubleSHA256 | Bitcoin BIP143 — `sha256(sha256(preimage))` | ✅ Supported | ❌ Rejected |
+| SHA512       | Ed25519 (RFC 8032 — `SHA-512(R ‖ A ‖ M)`) | ❌ Rejected | ✅ Supported |
+| Merlin       | Schnorrkel / Ristretto | ❌ Rejected | ❌ Rejected |
+
+> **Note on Secp256k1 signing.** The mock supports `hash_scheme` for Secp256k1
+> requests: it applies the requested hash function to the `message` bytes you
+> sent and signs the resulting 32-byte digest via `sign_prehash` with low-s
+> normalization (BIP146 / EIP-2). This means the produced signatures are
+> **valid on the destination chain** — they will ec_recover correctly on
+> Sepolia, Ethereum mainnet, Bitcoin testnet, etc.
+>
+> **Note on Ed25519 signing.** The client must declare `hash_scheme = SHA512`
+> because that's the only hash function the Ed25519 algorithm uses internally
+> (RFC 8032 — `Sign(sk, M) = Ed25519(SHA512(R ‖ A ‖ M))`). The mock doesn't
+> *apply* the SHA-512 itself (the `ed25519-dalek` crate handles that
+> internally), but it requires the client to pass it explicitly so the wire
+> request unambiguously says "this is Ed25519 with its standard hash."
+>
+> Hash schemes that don't apply to the dWallet's curve are rejected at the
+> gRPC layer — the mock returns `TransactionResponseData::Error` and the
+> gRPC call itself succeeds with the error in the application-level
+> response body, not as an HTTP 5xx.
+>
+> The on-chain `MessageApproval.message_hash` (the third PDA seed) is
+> **always `keccak256(preimage)`** regardless of `hash_scheme` — it's a
+> uniqueness key, not the signed digest. The dwallet program uses Solana's
+> cheap on-chain `keccak` syscall and stays chain-agnostic.
 
 ## DKG (Distributed Key Generation)
 

@@ -29,7 +29,7 @@ pub enum DWalletRequest {
 |---------|-------------|-------|
 | `DKG` | Supported | Secp256k1 and Curve25519 (Ed25519). Auto-commits dWallet on-chain and transfers authority to `intended_chain_sender`. |
 | `DKGWithPublicShare` | Supported | Same as DKG in mock. |
-| `Sign` | Supported | Signs with Ed25519 or Secp256k1 key (based on DKG curve). `signature_algorithm` and `hash_scheme` are accepted but ignored by mock. |
+| `Sign` | Supported | Signs with Ed25519 or Secp256k1 key (based on DKG curve). For Secp256k1 the mock supports `hash_scheme` (Keccak256, SHA256, DoubleSHA256) and signs the resulting digest via `sign_prehash` with low-s normalization, so the produced signatures are valid on the destination chain (EVM, Bitcoin BIP143, etc.). For Ed25519 the `hash_scheme` must be `SHA512` — that's the only hash function the Ed25519 algorithm uses internally (RFC 8032), and the mock requires the client to declare it explicitly. Any other scheme is rejected. |
 | `ImportedKeySign` | Supported | Same as Sign in mock. |
 | `Presign` | Supported | Returns random presign data. |
 | `PresignForDWallet` | Supported | Same as Presign in mock. |
@@ -183,13 +183,40 @@ DWalletRequest::PresignForDWallet {
 
 ### DWalletHashScheme
 
-| Variant | Index | Use For |
-|---------|-------|---------|
-| `Keccak256` | 0 | Ethereum, general purpose |
-| `SHA256` | 1 | Bitcoin, general purpose |
-| `DoubleSHA256` | 2 | Bitcoin transaction signing |
-| `SHA512` | 3 | Ed25519 signing |
-| `Merlin` | 4 | Schnorrkel/Substrate |
+`hash_scheme` controls the digest the dwallet network actually signs. For
+Secp256k1 ECDSA signatures the network applies this hash to the `message`
+bytes you sent and then signs the resulting 32-byte digest via `sign_prehash`
+— so the signature is over `hash_scheme(message)` and is valid on whichever
+chain expects that exact digest.
+
+Per-variant support depends on the signing curve:
+
+| Variant | Index | Used by | Secp256k1 | Ed25519 |
+|---------|-------|---------|-----------|---------|
+| `Keccak256`    | 0 | Ethereum (EIP-1559) — `keccak256(rlp_envelope)` | ✅ | ❌ |
+| `SHA256`       | 1 | Generic single-SHA256 | ✅ | ❌ |
+| `DoubleSHA256` | 2 | Bitcoin BIP143 — `sha256(sha256(preimage))` | ✅ | ❌ |
+| `SHA512`       | 3 | Ed25519 (RFC 8032 — `SHA-512(R ‖ A ‖ M)`) | ❌ | ✅ |
+| `Merlin`       | 4 | Schnorrkel / Ristretto — not an ECDSA or Ed25519 scheme | ❌ | ❌ |
+
+For **Ed25519** signing the client must declare `hash_scheme = SHA512` —
+that's the hash function the Ed25519 algorithm uses internally, and we
+require it to be passed explicitly so the wire request unambiguously says
+"this is Ed25519 with its standard hash" instead of leaving the field
+meaningless. Any other scheme is rejected.
+
+If you send an unsupported variant for the dWallet's curve, the mock
+returns `TransactionResponseData::Error` with
+`"hash_scheme <Variant> is not supported for this signature"`. The gRPC
+call itself succeeds (HTTP 200, no panic) — the error is delivered as the
+application-level response body.
+
+The on-chain `MessageApproval.message_hash` (the third PDA seed) is **always
+`keccak256(preimage)`** regardless of `hash_scheme` — it's a uniqueness key,
+not the signing digest. For EVM the lookup hash and the signing digest happen
+to coincide (both `keccak256`); for Bitcoin BIP143 they differ
+(lookup = `keccak256(preimage)`, signed = `sha256d(preimage)`). This decouples
+the on-chain dwallet program from chain-native sighash conventions.
 
 ### ChainId
 
