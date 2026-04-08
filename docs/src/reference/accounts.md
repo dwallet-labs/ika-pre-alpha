@@ -46,7 +46,7 @@ The network encryption public key used for DKG. PDA seeds: `["network_encryption
 
 ### DWallet
 
-A distributed signing key. PDA seeds: `["dwallet", curve_byte, public_key]`.
+A distributed signing key. PDA seeds: `["dwallet", chunks_of(curve_byte || public_key)]` — the curve byte is concatenated with the raw public key into a single buffer, then split into 32-byte pieces (Solana's `MAX_SEED_LEN`) and each chunk is passed as its own seed. For 32-byte pubkeys (Ed25519/Curve25519/Ristretto) the payload is 33 bytes → `[32, 1]`; for 33-byte compressed SEC1 (Secp256k1/r1) it is 34 bytes → `[32, 2]`.
 
 | Offset | Field | Size | Description |
 |--------|-------|------|-------------|

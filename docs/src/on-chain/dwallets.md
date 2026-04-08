@@ -10,9 +10,17 @@ A dWallet is an on-chain account that represents a distributed signing key. It i
 
 ```
 DWallet PDA:
-  Seeds: ["dwallet", curve_byte, public_key_bytes]
+  Seeds:   ["dwallet", chunks_of(curve_byte || public_key)]
   Program: DWALLET_PROGRAM_ID
 ```
+
+The curve byte is concatenated with the raw public key into a single buffer, which is then split into 32-byte chunks (Solana's `MAX_SEED_LEN`) and each chunk is passed as its own PDA seed. This is lossless and curve-agnostic — `find_program_address` accepts up to `MAX_SEEDS = 16` total seeds, so different pubkey lengths simply produce different chunk counts:
+
+| pubkey | payload (`curve‖pk`) | chunks |
+|---|---|---|
+| 32 bytes (Ed25519 / Curve25519 / Ristretto) | 33 bytes | `[32, 1]` |
+| 33 bytes (compressed Secp256k1 / Secp256r1) | 34 bytes | `[32, 2]` |
+| 65 bytes (uncompressed SEC1) | 66 bytes | `[32, 32, 2]` |
 
 | Offset | Field | Size | Description |
 |--------|-------|------|-------------|
