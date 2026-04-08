@@ -284,11 +284,18 @@ impl DWalletTestContext {
         public_key_len: u8,
         public_key: &[u8],
     ) -> Pubkey {
+        // PDA seeds = ["dwallet", chunks_of(curve || pubkey)] where the
+        // `curve || pubkey` payload is split into 32-byte chunks (Solana's
+        // `MAX_SEED_LEN`). Mirrors the on-chain `DWalletPdaSeeds::new`.
         let actual_key = &public_key[..public_key_len as usize];
-        let (dwallet_pda, dwallet_bump) = Pubkey::find_program_address(
-            &[b"dwallet", &[curve], actual_key],
-            &self.dwallet_program_id,
-        );
+        let payload = pack_dwallet_seed_payload(curve, actual_key);
+        let mut seeds: Vec<&[u8]> = Vec::with_capacity(4);
+        seeds.push(b"dwallet");
+        for chunk in payload.chunks(32) {
+            seeds.push(chunk);
+        }
+        let (dwallet_pda, dwallet_bump) =
+            Pubkey::find_program_address(&seeds, &self.dwallet_program_id);
 
         let noa_pubkey = keypair_pubkey(&self.noa_keypair);
         let mut pk_array = [0u8; 65];
@@ -832,4 +839,16 @@ fn cast_vote_no_cpi(
     );
 
     ctx.send_tx(&[&payer_ref, voter], &[ix]);
+}
+
+/// Pack `curve || public_key` into a single buffer for dWallet PDA seeds.
+///
+/// Mirrors `ika_dwallet_program::state::dwallet::DWalletPdaSeeds::new`:
+/// callers split the returned buffer into 32-byte chunks and pass each
+/// chunk as a separate seed to `find_program_address`.
+fn pack_dwallet_seed_payload(curve: u8, public_key: &[u8]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(1 + public_key.len());
+    buf.push(curve);
+    buf.extend_from_slice(public_key);
+    buf
 }

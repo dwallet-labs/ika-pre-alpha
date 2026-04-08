@@ -294,11 +294,18 @@ async fn main() {
     val("Public key", hex::encode(&public_key));
 
     // Poll for dWallet PDA on-chain (mock committed + transferred authority to payer).
+    //
+    // PDA seeds = ["dwallet", chunks_of(curve || pubkey)] where the
+    // `curve || pubkey` payload is split into 32-byte chunks (Solana's
+    // `MAX_SEED_LEN`). Mirrors the on-chain `DWalletPdaSeeds::new`.
     let curve = CURVE_CURVE25519;
-    let (dwallet_pda, _) = Pubkey::find_program_address(
-        &[SEED_DWALLET, &[curve], &public_key],
-        &dwallet_program_id,
-    );
+    let payload = pack_dwallet_seed_payload(curve, &public_key);
+    let mut seeds: Vec<&[u8]> = Vec::with_capacity(4);
+    seeds.push(SEED_DWALLET);
+    for chunk in payload.chunks(32) {
+        seeds.push(chunk);
+    }
+    let (dwallet_pda, _) = Pubkey::find_program_address(&seeds, &dwallet_program_id);
 
     poll_until(
         &client,
@@ -551,4 +558,16 @@ async fn main() {
     println!();
     println!("{BOLD}{GREEN}\u{2550}\u{2550}\u{2550} E2E Test Passed! \u{2550}\u{2550}\u{2550}{RESET}");
     println!();
+}
+
+/// Pack `curve || public_key` into a single buffer for dWallet PDA seeds.
+///
+/// Mirrors `ika_dwallet_program::state::dwallet::DWalletPdaSeeds::new`:
+/// callers split the returned buffer into 32-byte chunks and pass each
+/// chunk as a separate seed to `find_program_address`.
+fn pack_dwallet_seed_payload(curve: u8, public_key: &[u8]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(1 + public_key.len());
+    buf.push(curve);
+    buf.extend_from_slice(public_key);
+    buf
 }
