@@ -198,6 +198,10 @@ Per-variant support depends on the signing curve:
 | `DoubleSHA256` | 2 | Bitcoin BIP143 — `sha256(sha256(preimage))` | ✅ | ❌ |
 | `SHA512`       | 3 | Ed25519 (RFC 8032 — `SHA-512(R ‖ A ‖ M)`) | ❌ | ✅ |
 | `Merlin`       | 4 | Schnorrkel / Ristretto — not an ECDSA or Ed25519 scheme | ❌ | ❌ |
+| `Blake2b256Personal` | 5 | Zcash NU5+ (ZIP-244) — BLAKE2b-256 with 16-byte personalization | ✅ | ❌ |
+
+`Blake2b256Personal` carries a `personalization: [u8; 16]` field (the BLAKE2
+personalization parameter). For Zcash this is `"ZcashTxHash_" || consensus_branch_id` (4 LE bytes).
 
 For **Ed25519** signing the client must declare `hash_scheme = SHA512` —
 that's the hash function the Ed25519 algorithm uses internally, and we

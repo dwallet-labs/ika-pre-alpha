@@ -112,6 +112,7 @@ curve — anything else is rejected at the gRPC layer.
 | DoubleSHA256 | Bitcoin BIP143 — `sha256(sha256(preimage))` | ✅ Supported | ❌ Rejected |
 | SHA512       | Ed25519 (RFC 8032 — `SHA-512(R ‖ A ‖ M)`) | ❌ Rejected | ✅ Supported |
 | Merlin       | Schnorrkel / Ristretto | ❌ Rejected | ❌ Rejected |
+| Blake2b256Personal | Zcash NU5+ (ZIP-244) — BLAKE2b-256 with 16-byte personalization | ✅ Supported | ❌ Rejected |
 
 > **Note on Secp256k1 signing.** The mock supports `hash_scheme` for Secp256k1
 > requests: it applies the requested hash function to the `message` bytes you

@@ -58,6 +58,7 @@ const DWalletHashScheme = bcs.enum("DWalletHashScheme", {
   DoubleSHA256: null,
   SHA512: null,
   Merlin: null,
+  Blake2b256Personal: bcs.struct("B2P", { personalization: bcs.fixedArray(16, bcs.u8()) }),
 });
 
 const ApprovalProof = bcs.enum("ApprovalProof", {

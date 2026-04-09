@@ -143,13 +143,13 @@ pub enum DWalletSignatureAlgorithm {
 
 /// Hash scheme to apply to the message before signing.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[repr(u8)]
 pub enum DWalletHashScheme {
-    Keccak256 = 0,
-    SHA256 = 1,
-    DoubleSHA256 = 2,
-    SHA512 = 3,
-    Merlin = 4,
+    Keccak256,
+    SHA256,
+    DoubleSHA256,
+    SHA512,
+    Merlin,
+    Blake2b256Personal { personalization: [u8; 16] },
 }
 
 // ===================================================================
