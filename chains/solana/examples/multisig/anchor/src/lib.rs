@@ -61,7 +61,7 @@ pub mod multisig_anchor {
         ctx: Context<CreateTransaction>,
         message_hash: [u8; 32],
         user_pubkey: [u8; 32],
-        signature_scheme: u8,
+        signature_scheme: u16,
         message_approval_bump: u8,
         partial_user_sig: Pubkey,
         message_data: Vec<u8>,
@@ -146,13 +146,18 @@ pub mod multisig_anchor {
                 cpi_authority_bump,
             };
 
+            // No message metadata for multisig — use all zeros.
+            let message_metadata_digest = [0u8; 32];
+
             // CPI: approve_message.
             dwallet_ctx.approve_message(
+                &ctx.accounts.coordinator.to_account_info(),
                 &ctx.accounts.message_approval.to_account_info(),
                 &ctx.accounts.dwallet.to_account_info(),
                 &ctx.accounts.payer.to_account_info(),
                 &ctx.accounts.system_program.to_account_info(),
                 tx.message_hash,
+                message_metadata_digest,
                 tx.user_pubkey,
                 tx.signature_scheme,
                 tx.message_approval_bump,
@@ -299,6 +304,9 @@ pub struct Approve<'info> {
 
     // CPI accounts (needed when threshold is reached).
 
+    /// CHECK: DWalletCoordinator PDA on the dWallet program (for epoch).
+    pub coordinator: UncheckedAccount<'info>,
+
     /// CHECK: MessageApproval PDA on the dWallet program.
     #[account(mut)]
     pub message_approval: UncheckedAccount<'info>,
@@ -369,7 +377,7 @@ pub struct MultisigTransaction {
     pub proposer: Pubkey,
     pub message_hash: [u8; 32],
     pub user_pubkey: [u8; 32],
-    pub signature_scheme: u8,
+    pub signature_scheme: u16,
     pub approval_count: u16,
     pub rejection_count: u16,
     pub status: TransactionStatus,

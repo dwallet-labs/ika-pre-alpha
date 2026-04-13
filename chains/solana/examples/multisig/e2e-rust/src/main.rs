@@ -86,7 +86,7 @@ const SEED_DWALLET: &[u8] = b"dwallet";
 const SEED_MESSAGE_APPROVAL: &[u8] = b"message_approval";
 const SEED_CPI_AUTHORITY: &[u8] = b"__ika_cpi_authority";
 
-const CURVE_CURVE25519: u8 = 2;
+const CURVE_CURVE25519: u16 = 2;
 
 // Multisig program constants
 const TX_APPROVAL_COUNT: usize = 135;
@@ -876,9 +876,9 @@ async fn main() {
 /// Mirrors `ika_dwallet_program::state::dwallet::DWalletPdaSeeds::new`:
 /// callers split the returned buffer into 32-byte chunks and pass each
 /// chunk as a separate seed to `find_program_address`.
-fn pack_dwallet_seed_payload(curve: u8, public_key: &[u8]) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(1 + public_key.len());
-    buf.push(curve);
+fn pack_dwallet_seed_payload(curve: u16, public_key: &[u8]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(2 + public_key.len());
+    buf.extend_from_slice(&curve.to_le_bytes());
     buf.extend_from_slice(public_key);
     buf
 }

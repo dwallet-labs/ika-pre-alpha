@@ -19,11 +19,13 @@
 //! };
 //!
 //! ctx.approve_message(
+//!     &coordinator,
 //!     &message_approval,
 //!     &dwallet,
 //!     &payer,
 //!     &system_program,
-//!     message_hash,
+//!     message_digest,
+//!     message_metadata_digest,
 //!     user_pubkey,
 //!     signature_scheme,
 //!     bump,

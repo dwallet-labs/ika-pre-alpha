@@ -74,21 +74,21 @@ const DISC_MESSAGE_APPROVAL: u8 = 14;
 const COORDINATOR_LEN: usize = 116;
 const NEK_LEN: usize = 164;
 
-const MA_STATUS: usize = 139;
+const MA_STATUS: usize = 172;
 const MA_STATUS_SIGNED: u8 = 1;
-const MA_SIGNATURE_LEN: usize = 140;
-const MA_SIGNATURE: usize = 142;
+const MA_SIGNATURE_LEN: usize = 173;
+const MA_SIGNATURE: usize = 175;
 
 const SEED_DWALLET_COORDINATOR: &[u8] = b"dwallet_coordinator";
 const SEED_DWALLET: &[u8] = b"dwallet";
 const SEED_MESSAGE_APPROVAL: &[u8] = b"message_approval";
 const SEED_CPI_AUTHORITY: &[u8] = b"__ika_cpi_authority";
 
-const CURVE_CURVE25519: u8 = 2;
+const CURVE_CURVE25519: u16 = 2;
 
 // Voting program offsets
-const PROP_YES_VOTES: usize = 163;
-const PROP_STATUS: usize = 175;
+const PROP_YES_VOTES: usize = 164;
+const PROP_STATUS: usize = 176;
 
 // ======================================================================
 // Helpers
@@ -286,10 +286,14 @@ async fn main() {
             .expect("connect to gRPC")
     };
 
+    // Use a unique preimage so the mock stores the key under this address.
+    let dkg_preimage: [u8; 32] = solana_sdk::signature::Keypair::new()
+        .pubkey()
+        .to_bytes();
     let dkg_request = build_grpc_request(
         &payer,
         SignedRequestData {
-            session_identifier_preimage: [0u8; 32],
+            session_identifier_preimage: dkg_preimage,
             epoch: 1,
             chain_id: ChainId::Solana,
             intended_chain_sender: payer.pubkey().to_bytes().to_vec(),
@@ -327,14 +331,12 @@ async fn main() {
     let versioned: VersionedDWalletDataAttestation =
         bcs::from_bytes(&attestation.attestation_data).expect("decode attestation");
     let VersionedDWalletDataAttestation::V1(data) = versioned;
-    let (public_key, _public_output, _intended_sender) =
-        (data.public_key, data.public_output, data.intended_chain_sender);
+    let public_key = data.public_key;
 
-    // dwallet_addr is now derived deterministically from (curve, public_key)
-    // by the dwallet PDA seeds — we don't extract it from the attestation
-    // bytes anymore. Use payer.pubkey() as the session_identifier_preimage
-    // below to maintain the existing dwallet lookup flow.
-    let dwallet_addr: [u8; 32] = payer.pubkey().to_bytes();
+    // The mock stores the signing key under the session_identifier from the
+    // DKG request. Use it as the session_identifier_preimage for subsequent
+    // Presign/Sign requests so the mock can look up the key.
+    let dwallet_addr: [u8; 32] = data.session_identifier;
 
     val("dWallet address", hex::encode(dwallet_addr));
     val("Public key", hex::encode(&public_key));
@@ -406,17 +408,27 @@ async fn main() {
     let (proposal_pda, proposal_bump) =
         Pubkey::find_program_address(&[b"proposal", &proposal_id], &voting_program_id);
 
-    let (message_approval_pda, message_approval_bump) = Pubkey::find_program_address(
-        &[SEED_MESSAGE_APPROVAL, dwallet_pda.as_ref(), &message_hash],
-        &dwallet_program_id,
-    );
+    // MessageApproval PDA uses hierarchical seeds:
+    // ["dwallet", chunks(curve_u16_le || pk), "message_approval", &scheme_u16_le, &message_digest]
+    let scheme_u16: u16 = 5; // EddsaSha512 — matches Curve25519 DKG
+    let scheme_bytes = scheme_u16.to_le_bytes();
+    let ma_payload = pack_dwallet_seed_payload(curve, &public_key);
+    let mut ma_seeds: Vec<&[u8]> = vec![b"dwallet"];
+    for chunk in ma_payload.chunks(32) {
+        ma_seeds.push(chunk);
+    }
+    ma_seeds.push(b"message_approval");
+    ma_seeds.push(&scheme_bytes);
+    ma_seeds.push(&message_hash);
+    let (message_approval_pda, message_approval_bump) =
+        Pubkey::find_program_address(&ma_seeds, &dwallet_program_id);
 
-    let mut create_proposal = Vec::with_capacity(104);
+    let mut create_proposal = Vec::with_capacity(105);
     create_proposal.push(0); // disc
     create_proposal.extend_from_slice(&proposal_id);
     create_proposal.extend_from_slice(&message_hash);
     create_proposal.extend_from_slice(&user_pubkey);
-    create_proposal.push(0); // signature_scheme
+    create_proposal.extend_from_slice(&scheme_u16.to_le_bytes()); // signature_scheme (u16 LE) — must match MA PDA derivation
     create_proposal.extend_from_slice(&quorum.to_le_bytes());
     create_proposal.push(message_approval_bump);
     create_proposal.push(proposal_bump);
@@ -476,6 +488,7 @@ async fn main() {
 
         if vote_num as u32 >= quorum {
             accounts.extend_from_slice(&[
+                AccountMeta::new_readonly(coordinator_pda, false),
                 AccountMeta::new(message_approval_pda, false),
                 AccountMeta::new_readonly(dwallet_pda, false),
                 AccountMeta::new_readonly(voting_program_id, false),
@@ -538,9 +551,8 @@ async fn main() {
             epoch: 1,
             chain_id: ChainId::Solana,
             intended_chain_sender: payer.pubkey().to_bytes().to_vec(),
-            request: DWalletRequest::PresignForDWallet {
+            request: DWalletRequest::Presign {
                 dwallet_network_encryption_public_key: vec![0u8; 32],
-                dwallet_public_key: dwallet_addr.to_vec(),
                 curve: DWalletCurve::Curve25519,
                 signature_algorithm: DWalletSignatureAlgorithm::EdDSA,
             },
@@ -584,12 +596,7 @@ async fn main() {
                 message_metadata: vec![],
                 presign_session_identifier: presign_id,
                 message_centralized_signature: vec![0u8; 64],
-                dwallet_attestation: NetworkSignedAttestation {
-                    attestation_data: vec![0u8; 32],
-                    network_signature: vec![0u8; 64],
-                    network_pubkey: vec![0u8; 32],
-                    epoch: 1,
-                },
+                dwallet_attestation: attestation.clone(),
                 approval_proof: ApprovalProof::Solana {
                     transaction_signature: quorum_tx_sig.as_ref().to_vec(),
                     slot: 0,
@@ -657,9 +664,9 @@ async fn main() {
 /// Mirrors `ika_dwallet_program::state::dwallet::DWalletPdaSeeds::new`:
 /// callers split the returned buffer into 32-byte chunks and pass each
 /// chunk as a separate seed to `find_program_address`.
-fn pack_dwallet_seed_payload(curve: u8, public_key: &[u8]) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(1 + public_key.len());
-    buf.push(curve);
+fn pack_dwallet_seed_payload(curve: u16, public_key: &[u8]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(2 + public_key.len());
+    buf.extend_from_slice(&curve.to_le_bytes());
     buf.extend_from_slice(public_key);
     buf
 }

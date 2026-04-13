@@ -20,10 +20,10 @@
 //! # Account Layouts
 //!
 //! **Proposal** PDA (`["proposal", proposal_id]`):
-//!   discriminator(1) + version(1) + proposal_id(32) + dwallet(32) + message_hash(32) +
-//!   user_pubkey(32) + signature_scheme(1) + creator(32) + yes_votes(4) +
+//!   discriminator(1) + version(1) + proposal_id(32) + dwallet(32) + message_digest(32) +
+//!   user_pubkey(32) + signature_scheme(2) + creator(32) + yes_votes(4) +
 //!   no_votes(4) + quorum(4) + status(1) + message_approval_bump(1) +
-//!   bump(1) + _reserved(16) = 195 bytes
+//!   bump(1) + _reserved(16) = 196 bytes
 //!
 //! **VoteRecord** PDA (`["vote", proposal_id, voter]`):
 //!   discriminator(1) + version(1) + voter(32) + proposal_id(32) + vote(1) + bump(1) = 69 bytes (inc. header)
@@ -55,25 +55,25 @@ const STATUS_OPEN: u8 = 0;
 const STATUS_APPROVED: u8 = 1;
 
 // ── Account sizes ──
-const PROPOSAL_DATA_LEN: usize = 193;
+const PROPOSAL_DATA_LEN: usize = 194;
 const VOTE_RECORD_DATA_LEN: usize = 67;
 
-const PROPOSAL_LEN: usize = 2 + PROPOSAL_DATA_LEN; // 195
+const PROPOSAL_LEN: usize = 2 + PROPOSAL_DATA_LEN; // 196
 const VOTE_RECORD_LEN: usize = 2 + VOTE_RECORD_DATA_LEN; // 69
 
 // ── Offsets into Proposal data (after 2-byte header) ──
 const PROP_PROPOSAL_ID: usize = 2;
 const PROP_DWALLET: usize = 34;
-const PROP_MESSAGE_HASH: usize = 66;
+const PROP_MESSAGE_DIGEST: usize = 66;
 const PROP_USER_PUBKEY: usize = 98;
-const PROP_SIGNATURE_SCHEME: usize = 130;
-const PROP_CREATOR: usize = 131;
-const PROP_YES_VOTES: usize = 163;
-const PROP_NO_VOTES: usize = 167;
-const PROP_QUORUM: usize = 171;
-const PROP_STATUS: usize = 175;
-const PROP_MSG_APPROVAL_BUMP: usize = 176;
-const PROP_BUMP: usize = 177;
+const PROP_SIGNATURE_SCHEME: usize = 130; // 2 bytes (u16 LE)
+const PROP_CREATOR: usize = 132;
+const PROP_YES_VOTES: usize = 164;
+const PROP_NO_VOTES: usize = 168;
+const PROP_QUORUM: usize = 172;
+const PROP_STATUS: usize = 176;
+const PROP_MSG_APPROVAL_BUMP: usize = 177;
+const PROP_BUMP: usize = 178;
 
 // ── Offsets into VoteRecord data (after 2-byte header) ──
 const VR_VOTER: usize = 2;
@@ -101,7 +101,7 @@ pub fn process_instruction(
 ///
 /// # Instruction Data
 ///
-/// `[proposal_id(32), message_hash(32), user_pubkey(32), signature_scheme(1), quorum(4), message_approval_bump(1), bump(1)]` = 103 bytes
+/// `[proposal_id(32), message_digest(32), user_pubkey(32), signature_scheme(2), quorum(4), message_approval_bump(1), bump(1)]` = 104 bytes
 ///
 /// # Accounts
 ///
@@ -115,7 +115,7 @@ fn create_proposal(
     accounts: &[AccountInfo],
     data: &[u8],
 ) -> Result<(), ProgramError> {
-    if data.len() < 103 {
+    if data.len() < 104 {
         return Err(ProgramError::InvalidInstructionData);
     }
 
@@ -137,20 +137,24 @@ fn create_proposal(
     let proposal_id: [u8; 32] = data[0..32]
         .try_into()
         .map_err(|_| ProgramError::InvalidInstructionData)?;
-    let message_hash: [u8; 32] = data[32..64]
+    let message_digest: [u8; 32] = data[32..64]
         .try_into()
         .map_err(|_| ProgramError::InvalidInstructionData)?;
     let user_pubkey: [u8; 32] = data[64..96]
         .try_into()
         .map_err(|_| ProgramError::InvalidInstructionData)?;
-    let signature_scheme = data[96];
-    let quorum = u32::from_le_bytes(
-        data[97..101]
+    let signature_scheme = u16::from_le_bytes(
+        data[96..98]
             .try_into()
             .map_err(|_| ProgramError::InvalidInstructionData)?,
     );
-    let message_approval_bump = data[101];
-    let bump = data[102];
+    let quorum = u32::from_le_bytes(
+        data[98..102]
+            .try_into()
+            .map_err(|_| ProgramError::InvalidInstructionData)?,
+    );
+    let message_approval_bump = data[102];
+    let bump = data[103];
 
     // Verify quorum is at least 1.
     if quorum == 0 {
@@ -182,9 +186,10 @@ fn create_proposal(
 
     prop_data[PROP_PROPOSAL_ID..PROP_PROPOSAL_ID + 32].copy_from_slice(&proposal_id);
     prop_data[PROP_DWALLET..PROP_DWALLET + 32].copy_from_slice(dwallet.key.as_ref());
-    prop_data[PROP_MESSAGE_HASH..PROP_MESSAGE_HASH + 32].copy_from_slice(&message_hash);
+    prop_data[PROP_MESSAGE_DIGEST..PROP_MESSAGE_DIGEST + 32].copy_from_slice(&message_digest);
     prop_data[PROP_USER_PUBKEY..PROP_USER_PUBKEY + 32].copy_from_slice(&user_pubkey);
-    prop_data[PROP_SIGNATURE_SCHEME] = signature_scheme;
+    prop_data[PROP_SIGNATURE_SCHEME..PROP_SIGNATURE_SCHEME + 2]
+        .copy_from_slice(&signature_scheme.to_le_bytes());
     prop_data[PROP_CREATOR..PROP_CREATOR + 32].copy_from_slice(creator.key.as_ref());
     prop_data[PROP_YES_VOTES..PROP_YES_VOTES + 4].copy_from_slice(&0u32.to_le_bytes());
     prop_data[PROP_NO_VOTES..PROP_NO_VOTES + 4].copy_from_slice(&0u32.to_le_bytes());
@@ -216,11 +221,12 @@ fn create_proposal(
 ///
 /// When quorum is reached, additional accounts are required for the CPI:
 ///
-/// 5. `[writable]`          MessageApproval PDA (to create via CPI)
-/// 6. `[readonly]`          dWallet account
-/// 7. `[readonly]`          This program account (caller_program for CPI)
-/// 8. `[readonly]`          CPI authority PDA (signer via invoke_signed)
-/// 9. `[readonly]`          dWallet program
+/// 5. `[readonly]`          DWalletCoordinator PDA (for epoch)
+/// 6. `[writable]`          MessageApproval PDA (to create via CPI)
+/// 7. `[readonly]`          dWallet account
+/// 8. `[readonly]`          This program account (caller_program for CPI)
+/// 9. `[readonly]`          CPI authority PDA (signer via invoke_signed)
+/// 10. `[readonly]`         dWallet program
 fn cast_vote(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -352,23 +358,30 @@ fn cast_vote(
 
     // If quorum reached, CPI-call approve_message.
     if yes_votes >= quorum {
-        if accounts.len() < 10 {
+        if accounts.len() < 11 {
             return Err(ProgramError::NotEnoughAccountKeys);
         }
 
-        let message_approval = &accounts[5];
-        let dwallet = &accounts[6];
-        let caller_program = &accounts[7];
-        let cpi_authority = &accounts[8];
-        let dwallet_program = &accounts[9];
+        let coordinator = &accounts[5];
+        let message_approval = &accounts[6];
+        let dwallet = &accounts[7];
+        let caller_program = &accounts[8];
+        let cpi_authority = &accounts[9];
+        let dwallet_program = &accounts[10];
 
         // Read proposal fields for the CPI call.
-        let mut message_hash = [0u8; 32];
-        message_hash.copy_from_slice(&prop_data[PROP_MESSAGE_HASH..PROP_MESSAGE_HASH + 32]);
+        let mut message_digest = [0u8; 32];
+        message_digest.copy_from_slice(&prop_data[PROP_MESSAGE_DIGEST..PROP_MESSAGE_DIGEST + 32]);
         let mut user_pubkey = [0u8; 32];
         user_pubkey.copy_from_slice(&prop_data[PROP_USER_PUBKEY..PROP_USER_PUBKEY + 32]);
-        let signature_scheme = prop_data[PROP_SIGNATURE_SCHEME];
+        let signature_scheme = u16::from_le_bytes(
+            prop_data[PROP_SIGNATURE_SCHEME..PROP_SIGNATURE_SCHEME + 2]
+                .try_into()
+                .map_err(|_| ProgramError::InvalidAccountData)?,
+        );
         let message_approval_bump = prop_data[PROP_MSG_APPROVAL_BUMP];
+        // No message metadata for voting — use all zeros.
+        let message_metadata_digest = [0u8; 32];
 
         // Must drop the mutable borrow before CPI.
         drop(prop_data);
@@ -381,11 +394,13 @@ fn cast_vote(
         };
 
         ctx.approve_message(
+            coordinator,
             message_approval,
             dwallet,
             payer,
             system_program,
-            message_hash,
+            message_digest,
+            message_metadata_digest,
             user_pubkey,
             signature_scheme,
             message_approval_bump,

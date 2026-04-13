@@ -15,7 +15,7 @@ use pinocchio::{
 
 use crate::CPI_AUTHORITY_SEED;
 
-// -- Instruction discriminators (must match IkaDWalletInstructionDiscriminators) --
+// ── Instruction discriminators (must match IkaDWalletInstructionDiscriminators) ──
 const IX_APPROVE_MESSAGE: u8 = 8;
 const IX_TRANSFER_OWNERSHIP: u8 = 24;
 const IX_TRANSFER_FUTURE_SIGN: u8 = 42;
@@ -43,32 +43,38 @@ impl<'a> DWalletContext<'a> {
     ///
     /// # Accounts (program mode)
     ///
-    /// - `message_approval`: writable, empty -- the PDA to create
-    /// - `dwallet`: readonly, program-owned -- the dWallet account
-    /// - `caller_program`: readonly, executable -- the calling program (from context)
-    /// - `cpi_authority`: readonly, signer -- the CPI authority PDA (from context)
-    /// - `payer`: writable, signer -- pays for PDA rent
-    /// - `system_program`: readonly -- the system program
+    /// - `coordinator`: readonly — the DWalletCoordinator PDA (for epoch)
+    /// - `message_approval`: writable, empty — the PDA to create
+    /// - `dwallet`: readonly, program-owned — the dWallet account
+    /// - `caller_program`: readonly, executable — the calling program (from context)
+    /// - `cpi_authority`: readonly, signer — the CPI authority PDA (from context)
+    /// - `payer`: writable, signer — pays for PDA rent
+    /// - `system_program`: readonly — the system program
     pub fn approve_message(
         &self,
+        coordinator: &'a AccountView,
         message_approval: &'a AccountView,
         dwallet: &'a AccountView,
         payer: &'a AccountView,
         system_program: &'a AccountView,
-        message_hash: [u8; 32],
+        message_digest: [u8; 32],
+        message_metadata_digest: [u8; 32],
         user_pubkey: [u8; 32],
-        signature_scheme: u8,
+        signature_scheme: u16,
         bump: u8,
     ) -> ProgramResult {
-        // Build instruction data: [discriminator, bump, message_hash(32), user_pubkey(32), signature_scheme]
-        let mut ix_data = Vec::with_capacity(67);
+        // Build instruction data: [discriminator, bump, message_digest(32),
+        //   message_metadata_digest(32), user_pubkey(32), signature_scheme(2)] = 100 bytes
+        let mut ix_data = Vec::with_capacity(100);
         ix_data.push(IX_APPROVE_MESSAGE);
         ix_data.push(bump);
-        ix_data.extend_from_slice(&message_hash);
+        ix_data.extend_from_slice(&message_digest);
+        ix_data.extend_from_slice(&message_metadata_digest);
         ix_data.extend_from_slice(&user_pubkey);
-        ix_data.push(signature_scheme);
+        ix_data.extend_from_slice(&signature_scheme.to_le_bytes());
 
         let instruction_accounts = [
+            InstructionAccount::readonly(coordinator.address()),
             InstructionAccount::writable(message_approval.address()),
             InstructionAccount::readonly(dwallet.address()),
             InstructionAccount::readonly(self.caller_program.address()),
@@ -93,6 +99,7 @@ impl<'a> DWalletContext<'a> {
         invoke_signed(
             &instruction,
             &[
+                coordinator,
                 message_approval,
                 dwallet,
                 self.caller_program,
@@ -112,9 +119,9 @@ impl<'a> DWalletContext<'a> {
     ///
     /// # Accounts (program mode)
     ///
-    /// - `caller_program`: readonly, executable -- the calling program (from context)
-    /// - `cpi_authority`: readonly, signer -- the CPI authority PDA (from context)
-    /// - `dwallet`: writable, program-owned -- the dWallet account
+    /// - `caller_program`: readonly, executable — the calling program (from context)
+    /// - `cpi_authority`: readonly, signer — the CPI authority PDA (from context)
+    /// - `dwallet`: writable, program-owned — the dWallet account
     pub fn transfer_dwallet(
         &self,
         dwallet: &'a AccountView,
@@ -163,9 +170,9 @@ impl<'a> DWalletContext<'a> {
     ///
     /// # Accounts (program mode)
     ///
-    /// - `partial_user_sig`: writable, program-owned -- the partial signature account
-    /// - `caller_program`: readonly, executable -- the calling program (from context)
-    /// - `cpi_authority`: readonly, signer -- the CPI authority PDA (from context)
+    /// - `partial_user_sig`: writable, program-owned — the partial signature account
+    /// - `caller_program`: readonly, executable — the calling program (from context)
+    /// - `cpi_authority`: readonly, signer — the CPI authority PDA (from context)
     pub fn transfer_future_sign(
         &self,
         partial_user_sig: &'a AccountView,

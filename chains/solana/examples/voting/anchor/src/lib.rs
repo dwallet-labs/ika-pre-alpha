@@ -21,13 +21,13 @@ declare_id!("LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY");
 pub mod voting_anchor {
     use super::*;
 
-    /// Create a proposal PDA with a target dWallet, message hash, and quorum.
+    /// Create a proposal PDA with a target dWallet, message digest, and quorum.
     pub fn create_proposal(
         ctx: Context<CreateProposal>,
         proposal_id: [u8; 32],
-        message_hash: [u8; 32],
+        message_digest: [u8; 32],
         user_pubkey: [u8; 32],
-        signature_scheme: u8,
+        signature_scheme: u16,
         quorum: u32,
         message_approval_bump: u8,
     ) -> Result<()> {
@@ -36,7 +36,7 @@ pub mod voting_anchor {
         let proposal = &mut ctx.accounts.proposal;
         proposal.proposal_id = proposal_id;
         proposal.dwallet = ctx.accounts.dwallet.key();
-        proposal.message_hash = message_hash;
+        proposal.message_digest = message_digest;
         proposal.user_pubkey = user_pubkey;
         proposal.signature_scheme = signature_scheme;
         proposal.creator = ctx.accounts.creator.key();
@@ -89,12 +89,17 @@ pub mod voting_anchor {
                 cpi_authority_bump,
             };
 
+            // No message metadata for voting — use all zeros.
+            let message_metadata_digest = [0u8; 32];
+
             dwallet_ctx.approve_message(
+                &ctx.accounts.coordinator.to_account_info(),
                 &ctx.accounts.message_approval.to_account_info(),
                 &ctx.accounts.dwallet.to_account_info(),
                 &ctx.accounts.payer.to_account_info(),
                 &ctx.accounts.system_program.to_account_info(),
-                proposal.message_hash,
+                proposal.message_digest,
+                message_metadata_digest,
                 proposal.user_pubkey,
                 proposal.signature_scheme,
                 proposal.message_approval_bump,
@@ -160,6 +165,9 @@ pub struct CastVote<'info> {
 
     // CPI accounts (needed when quorum is reached).
 
+    /// CHECK: DWalletCoordinator PDA on the dWallet program (for epoch).
+    pub coordinator: UncheckedAccount<'info>,
+
     /// CHECK: MessageApproval PDA on the dWallet program.
     #[account(mut)]
     pub message_approval: UncheckedAccount<'info>,
@@ -184,9 +192,9 @@ pub struct CastVote<'info> {
 pub struct Proposal {
     pub proposal_id: [u8; 32],
     pub dwallet: Pubkey,
-    pub message_hash: [u8; 32],
+    pub message_digest: [u8; 32],
     pub user_pubkey: [u8; 32],
-    pub signature_scheme: u8,
+    pub signature_scheme: u16,
     pub creator: Pubkey,
     pub yes_votes: u32,
     pub no_votes: u32,

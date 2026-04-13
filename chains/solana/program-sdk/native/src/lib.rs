@@ -19,11 +19,13 @@
 //! };
 //!
 //! ctx.approve_message(
+//!     &coordinator_info,
 //!     &message_approval_info,
 //!     &dwallet_info,
 //!     &payer_info,
 //!     &system_program_info,
-//!     message_hash,
+//!     message_digest,
+//!     message_metadata_digest,
 //!     user_pubkey,
 //!     signature_scheme,
 //!     bump,
@@ -70,6 +72,7 @@ impl<'a, 'info> DWalletContext<'a, 'info> {
     ///
     /// # Accounts (program mode)
     ///
+    /// - `coordinator`: readonly -- the DWalletCoordinator PDA (for epoch)
     /// - `message_approval`: writable, empty -- the PDA to create
     /// - `dwallet`: readonly, program-owned -- the dWallet account
     /// - `caller_program`: readonly, executable -- the calling program (from context)
@@ -78,26 +81,31 @@ impl<'a, 'info> DWalletContext<'a, 'info> {
     /// - `system_program`: readonly -- the system program
     pub fn approve_message(
         &self,
+        coordinator: &AccountInfo<'info>,
         message_approval: &AccountInfo<'info>,
         dwallet: &AccountInfo<'info>,
         payer: &AccountInfo<'info>,
         system_program: &AccountInfo<'info>,
-        message_hash: [u8; 32],
+        message_digest: [u8; 32],
+        message_metadata_digest: [u8; 32],
         user_pubkey: [u8; 32],
-        signature_scheme: u8,
+        signature_scheme: u16,
         bump: u8,
     ) -> Result<(), ProgramError> {
-        // Build instruction data: [discriminator, bump, message_hash(32), user_pubkey(32), signature_scheme]
-        let mut ix_data = Vec::with_capacity(67);
+        // Build instruction data: [discriminator, bump, message_digest(32),
+        //   message_metadata_digest(32), user_pubkey(32), signature_scheme(2)] = 100 bytes
+        let mut ix_data = Vec::with_capacity(100);
         ix_data.push(IX_APPROVE_MESSAGE);
         ix_data.push(bump);
-        ix_data.extend_from_slice(&message_hash);
+        ix_data.extend_from_slice(&message_digest);
+        ix_data.extend_from_slice(&message_metadata_digest);
         ix_data.extend_from_slice(&user_pubkey);
-        ix_data.push(signature_scheme);
+        ix_data.extend_from_slice(&signature_scheme.to_le_bytes());
 
         let ix = Instruction {
             program_id: *self.dwallet_program.key,
             accounts: vec![
+                AccountMeta::new_readonly(*coordinator.key, false),
                 AccountMeta::new(*message_approval.key, false),
                 AccountMeta::new_readonly(*dwallet.key, false),
                 AccountMeta::new_readonly(*self.caller_program.key, false),
@@ -109,6 +117,7 @@ impl<'a, 'info> DWalletContext<'a, 'info> {
         };
 
         let account_infos = &[
+            coordinator.clone(),
             message_approval.clone(),
             dwallet.clone(),
             self.caller_program.clone(),

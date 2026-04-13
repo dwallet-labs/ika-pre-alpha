@@ -24,10 +24,10 @@
 //!
 //! **Transaction** PDA (`["transaction", multisig, tx_index_bytes]`):
 //!   disc(1) + version(1) + multisig(32) + tx_index(4) + proposer(32) +
-//!   message_hash(32) + user_pubkey(32) + signature_scheme(1) +
+//!   message_hash(32) + user_pubkey(32) + signature_scheme(2) +
 //!   approval_count(2) + rejection_count(2) + status(1) +
 //!   message_approval_bump(1) + partial_user_sig(32) + bump(1) +
-//!   message_data_len(2) + message_data(256) = 432 bytes
+//!   message_data_len(2) + message_data(256) = 433 bytes
 //!
 //! **ApprovalRecord** PDA (`["approval", transaction, member]`):
 //!   disc(1) + version(1) + member(32) + transaction(32) + approved(1) +
@@ -68,7 +68,7 @@ const STATUS_REJECTED: u8 = 2;
 
 // -- Account sizes --
 const MULTISIG_LEN: usize = 2 + 32 + 2 + 2 + 4 + 32 + 1 + (32 * MAX_MEMBERS); // 395
-const TRANSACTION_LEN: usize = 2 + 32 + 4 + 32 + 32 + 32 + 1 + 2 + 2 + 1 + 1 + 32 + 1 + 2 + 256; // 432
+const TRANSACTION_LEN: usize = 2 + 32 + 4 + 32 + 32 + 32 + 2 + 2 + 2 + 1 + 1 + 32 + 1 + 2 + 256; // 433
 const APPROVAL_RECORD_LEN: usize = 2 + 32 + 32 + 1 + 1; // 68
 
 // -- Multisig offsets (after 2-byte header) --
@@ -86,15 +86,15 @@ const TX_INDEX: usize = 34;
 const TX_PROPOSER: usize = 38;
 const TX_MESSAGE_HASH: usize = 70;
 const TX_USER_PUBKEY: usize = 102;
-const TX_SIGNATURE_SCHEME: usize = 134;
-const TX_APPROVAL_COUNT: usize = 135;
-const TX_REJECTION_COUNT: usize = 137;
-const TX_STATUS: usize = 139;
-const TX_MSG_APPROVAL_BUMP: usize = 140;
-const TX_PARTIAL_USER_SIG: usize = 141;
-const TX_BUMP: usize = 173;
-const TX_MESSAGE_DATA_LEN: usize = 174;
-const TX_MESSAGE_DATA: usize = 176;
+const TX_SIGNATURE_SCHEME: usize = 134; // 2 bytes (u16 LE)
+const TX_APPROVAL_COUNT: usize = 136;
+const TX_REJECTION_COUNT: usize = 138;
+const TX_STATUS: usize = 140;
+const TX_MSG_APPROVAL_BUMP: usize = 141;
+const TX_PARTIAL_USER_SIG: usize = 142;
+const TX_BUMP: usize = 174;
+const TX_MESSAGE_DATA_LEN: usize = 175;
+const TX_MESSAGE_DATA: usize = 177;
 
 // -- ApprovalRecord offsets (after 2-byte header) --
 const AR_MEMBER: usize = 2;
@@ -253,7 +253,7 @@ fn create_multisig(
 ///
 /// # Instruction Data
 ///
-/// `[message_hash(32), user_pubkey(32), signature_scheme(1),
+/// `[message_hash(32), user_pubkey(32), signature_scheme(2),
 ///   message_approval_bump(1), partial_user_sig(32), tx_bump(1),
 ///   message_data_len(2), message_data(var)]`
 ///
@@ -269,7 +269,7 @@ fn create_transaction(
     accounts: &[AccountView],
     data: &[u8],
 ) -> ProgramResult {
-    if data.len() < 101 {
+    if data.len() < 102 {
         return Err(ProgramError::InvalidInstructionData);
     }
 
@@ -302,14 +302,18 @@ fn create_transaction(
     let user_pubkey: [u8; 32] = data[32..64]
         .try_into()
         .map_err(|_| ProgramError::InvalidInstructionData)?;
-    let signature_scheme = data[64];
-    let message_approval_bump = data[65];
-    let partial_user_sig: [u8; 32] = data[66..98]
+    let signature_scheme = u16::from_le_bytes(
+        data[64..66]
+            .try_into()
+            .map_err(|_| ProgramError::InvalidInstructionData)?,
+    );
+    let message_approval_bump = data[66];
+    let partial_user_sig: [u8; 32] = data[67..99]
         .try_into()
         .map_err(|_| ProgramError::InvalidInstructionData)?;
-    let tx_bump = data[98];
+    let tx_bump = data[99];
     let message_data_len = u16::from_le_bytes(
-        data[99..101]
+        data[100..102]
             .try_into()
             .map_err(|_| ProgramError::InvalidInstructionData)?,
     );
@@ -318,7 +322,7 @@ fn create_transaction(
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    let total_data_len = 101 + message_data_len as usize;
+    let total_data_len = 102 + message_data_len as usize;
     if data.len() < total_data_len {
         return Err(ProgramError::InvalidInstructionData);
     }
@@ -361,7 +365,8 @@ fn create_transaction(
     tx_data[TX_PROPOSER..TX_PROPOSER + 32].copy_from_slice(proposer.address().as_array());
     tx_data[TX_MESSAGE_HASH..TX_MESSAGE_HASH + 32].copy_from_slice(&message_hash);
     tx_data[TX_USER_PUBKEY..TX_USER_PUBKEY + 32].copy_from_slice(&user_pubkey);
-    tx_data[TX_SIGNATURE_SCHEME] = signature_scheme;
+    tx_data[TX_SIGNATURE_SCHEME..TX_SIGNATURE_SCHEME + 2]
+        .copy_from_slice(&signature_scheme.to_le_bytes());
     tx_data[TX_APPROVAL_COUNT..TX_APPROVAL_COUNT + 2].copy_from_slice(&0u16.to_le_bytes());
     tx_data[TX_REJECTION_COUNT..TX_REJECTION_COUNT + 2].copy_from_slice(&0u16.to_le_bytes());
     tx_data[TX_STATUS] = STATUS_ACTIVE;
@@ -373,7 +378,7 @@ fn create_transaction(
 
     // Copy message data (up to 256 bytes).
     if message_data_len > 0 {
-        let msg_src = &data[101..101 + message_data_len as usize];
+        let msg_src = &data[102..102 + message_data_len as usize];
         tx_data[TX_MESSAGE_DATA..TX_MESSAGE_DATA + message_data_len as usize]
             .copy_from_slice(msg_src);
     }
@@ -409,15 +414,16 @@ fn create_transaction(
 ///
 /// When threshold is reached, additional accounts for CPI:
 ///
-/// 6.  `[writable]`          MessageApproval PDA (to create via CPI)
-/// 7.  `[readonly]`          dWallet account
-/// 8.  `[readonly]`          This program account (caller_program for CPI)
-/// 9.  `[readonly]`          CPI authority PDA (signer via invoke_signed)
-/// 10. `[readonly]`          dWallet program
+/// 6.  `[readonly]`          DWalletCoordinator PDA (for epoch)
+/// 7.  `[writable]`          MessageApproval PDA (to create via CPI)
+/// 8.  `[readonly]`          dWallet account
+/// 9.  `[readonly]`          This program account (caller_program for CPI)
+/// 10. `[readonly]`          CPI authority PDA (signer via invoke_signed)
+/// 11. `[readonly]`          dWallet program
 ///
 /// If partial_user_sig is set (not all zeros), additional account:
 ///
-/// 11. `[writable]`          PartialUserSignature account (for transfer_future_sign)
+/// 12. `[writable]`          PartialUserSignature account (for transfer_future_sign)
 fn approve(
     program_id: &Address,
     accounts: &[AccountView],
@@ -530,23 +536,30 @@ fn approve(
     );
 
     if new_approvals >= threshold {
-        if accounts.len() < 11 {
+        if accounts.len() < 12 {
             return Err(ProgramError::NotEnoughAccountKeys);
         }
 
-        let message_approval = &accounts[6];
-        let dwallet = &accounts[7];
-        let caller_program = &accounts[8];
-        let cpi_authority = &accounts[9];
-        let dwallet_program = &accounts[10];
+        let coordinator = &accounts[6];
+        let message_approval = &accounts[7];
+        let dwallet = &accounts[8];
+        let caller_program = &accounts[9];
+        let cpi_authority = &accounts[10];
+        let dwallet_program = &accounts[11];
 
         // Read transaction fields for CPI call.
         let mut message_hash = [0u8; 32];
         message_hash.copy_from_slice(&tx_data[TX_MESSAGE_HASH..TX_MESSAGE_HASH + 32]);
         let mut user_pubkey = [0u8; 32];
         user_pubkey.copy_from_slice(&tx_data[TX_USER_PUBKEY..TX_USER_PUBKEY + 32]);
-        let signature_scheme = tx_data[TX_SIGNATURE_SCHEME];
+        let signature_scheme = u16::from_le_bytes(
+            tx_data[TX_SIGNATURE_SCHEME..TX_SIGNATURE_SCHEME + 2]
+                .try_into()
+                .map_err(|_| ProgramError::InvalidAccountData)?,
+        );
         let message_approval_bump = tx_data[TX_MSG_APPROVAL_BUMP];
+        // No message metadata for multisig — use all zeros.
+        let message_metadata_digest = [0u8; 32];
 
         let ctx = DWalletContext {
             dwallet_program,
@@ -557,11 +570,13 @@ fn approve(
 
         // CPI: approve_message to create MessageApproval and trigger signing.
         ctx.approve_message(
+            coordinator,
             message_approval,
             dwallet,
             payer,
             system_program,
             message_hash,
+            message_metadata_digest,
             user_pubkey,
             signature_scheme,
             message_approval_bump,
@@ -574,10 +589,10 @@ fn approve(
             .map_err(|_| ProgramError::InvalidAccountData)?;
 
         if partial_user_sig_bytes != [0u8; 32] {
-            if accounts.len() < 12 {
+            if accounts.len() < 13 {
                 return Err(ProgramError::NotEnoughAccountKeys);
             }
-            let partial_user_sig_account = &accounts[11];
+            let partial_user_sig_account = &accounts[12];
 
             // Transfer future sign completion authority to the proposer.
             let mut proposer_key = [0u8; 32];

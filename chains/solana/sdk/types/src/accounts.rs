@@ -42,7 +42,7 @@ fn read_u16(data: &[u8], offset: usize) -> u16 {
     u16::from_le_bytes(bytes)
 }
 
-// -- SystemState readers --
+// ── SystemState readers ──
 // Offsets are relative to account data start (after discriminator + version = byte 2).
 
 /// Read SystemState.epoch from raw account data.
@@ -62,7 +62,7 @@ pub fn system_state_authority(data: &[u8]) -> Option<&[u8]> {
     Some(&data[34..66])
 }
 
-// -- Validator readers --
+// ── Validator readers ──
 
 /// Read Validator.state from raw account data (0=PreActive, 1=Active, 2=Withdrawing).
 pub fn validator_state(data: &[u8]) -> Option<u8> {
@@ -90,7 +90,7 @@ pub fn validator_ika_balance(data: &[u8]) -> Option<u64> {
     Some(read_u64(data, 159))
 }
 
-// -- StakeAccount readers --
+// ── StakeAccount readers ──
 
 /// Read StakeAccount.owner from raw account data.
 pub fn stake_account_owner(data: &[u8]) -> Option<&[u8]> {
@@ -118,7 +118,7 @@ pub fn stake_account_principal(data: &[u8]) -> Option<u64> {
     Some(read_u64(data, 74))
 }
 
-// -- ValidatorList readers --
+// ── ValidatorList readers ──
 
 /// Read ValidatorList.validator_count from raw account data.
 pub fn validator_list_validator_count(data: &[u8]) -> Option<u32> {
