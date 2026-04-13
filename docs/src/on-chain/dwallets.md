@@ -10,31 +10,60 @@ A dWallet is an on-chain account that represents a distributed signing key. It i
 
 ```
 DWallet PDA:
-  Seeds:   ["dwallet", chunks_of(curve_byte || public_key)]
+  Seeds:   ["dwallet", chunks_of(curve_u16_le || public_key)]
   Program: DWALLET_PROGRAM_ID
 ```
 
-The curve byte is concatenated with the raw public key into a single buffer, which is then split into 32-byte chunks (Solana's `MAX_SEED_LEN`) and each chunk is passed as its own PDA seed. This is lossless and curve-agnostic — `find_program_address` accepts up to `MAX_SEEDS = 16` total seeds, so different pubkey lengths simply produce different chunk counts:
+The curve is stored as a `u16` (2 bytes, little-endian) concatenated with the raw public key into a single buffer, which is then split into 32-byte chunks (Solana's `MAX_SEED_LEN`) and each chunk is passed as its own PDA seed. This is lossless and curve-agnostic -- `find_program_address` accepts up to `MAX_SEEDS = 16` total seeds, so different pubkey lengths simply produce different chunk counts:
 
-| pubkey | payload (`curve‖pk`) | chunks |
+| pubkey | payload (`curve_u16_le || pk`) | chunks |
 |---|---|---|
-| 32 bytes (Ed25519 / Curve25519 / Ristretto) | 33 bytes | `[32, 1]` |
-| 33 bytes (compressed Secp256k1 / Secp256r1) | 34 bytes | `[32, 2]` |
-| 65 bytes (uncompressed SEC1) | 66 bytes | `[32, 32, 2]` |
+| 32 bytes (Ed25519 / Curve25519 / Ristretto) | 34 bytes | `[32, 2]` |
+| 33 bytes (compressed Secp256k1 / Secp256r1) | 35 bytes | `[32, 3]` |
+| 65 bytes (uncompressed SEC1) | 67 bytes | `[32, 32, 3]` |
 
 | Offset | Field | Size | Description |
 |--------|-------|------|-------------|
-| 0 | discriminator | 1 | Account type identifier |
+| 0 | discriminator | 1 | `2` |
 | 1 | version | 1 | `1` |
 | 2 | authority | 32 | Who can approve messages (user or CPI PDA) |
-| 34 | public_key | 65 | dWallet public key (padded to 65 bytes) |
-| 99 | public_key_len | 1 | Actual public key length (32 or 33) |
-| 100 | curve | 1 | Curve type identifier |
-| 101 | is_imported | 1 | Whether the key was imported vs created |
+| 34 | curve | 2 | Curve type (u16 LE): 0=Secp256k1, 1=Secp256r1, 2=Curve25519, 3=Ristretto |
+| 36 | state | 1 | 0=DKGInProgress, 1=Active, 2=Frozen |
+| 37 | public_key_len | 1 | Actual public key length (32 or 33) |
+| 38 | public_key | 65 | dWallet public key (padded to 65 bytes) |
+| 103 | created_epoch | 8 | Epoch when this dWallet was created (LE u64) |
+| 111 | noa_public_key | 32 | NOA Ed25519 public key used during DKG |
+| 143 | is_imported | 1 | Whether the key was imported (0=standard DKG, 1=imported) |
+| 144 | bump | 1 | PDA bump seed |
+| 145 | _reserved | 8 | Reserved for future use |
+
+**Total: 153 bytes (2 header + 151 data)**
+
+Attestation data (DKG output, proofs, etc.) is stored in separate variable-size `DWalletAttestation` PDAs rooted from this dWallet's seed hierarchy, not inline in the DWallet account.
 
 The `authority` field determines who can call `approve_message` for this dWallet:
 - A **user pubkey** -- the user signs the `approve_message` instruction directly
 - A **CPI authority PDA** -- a program controls the dWallet via CPI
+
+## DWalletAttestation Account
+
+Variable-size PDA storing BCS-serialized versioned attestation data + NOA Ed25519 signature. One attestation PDA per type per dWallet.
+
+```
+Account layout: [discriminator(1), version(1), noa_signature(64), bump(1), attestation_data...]
+```
+
+**Discriminator:** `15`
+**Header:** 67 bytes (1 + 1 + 64 + 1), followed by variable-length attestation data.
+
+Multiple PDA seed patterns depending on the type:
+
+| Type | Seeds |
+|------|-------|
+| DKG | `["dwallet", chunks..., "attestation"]` |
+| MakePublic | `["dwallet", chunks..., "public_user_share"]` |
+| ReEncrypt | `["dwallet", chunks..., "encrypted_user_share", &enc_key, "attestation"]` |
+| FutureSign | `["dwallet", chunks..., "partial_user_sig", &scheme_u16_le, &msg_digest, [&meta_digest], "attestation"]` |
 
 ## Creating a dWallet
 
@@ -42,7 +71,7 @@ dWallets are created through the gRPC API, not directly on-chain. The flow:
 
 1. User sends a `DKG` request via gRPC with their key share
 2. The Ika network runs the 2PC-MPC DKG protocol
-3. The NOA calls `CommitDWallet` on-chain to create the dWallet account
+3. The NOA calls `CommitDWallet` on-chain to create the dWallet account and its DKG attestation PDA
 4. The dWallet's authority is set to the user
 
 ```rust
@@ -51,10 +80,16 @@ let request = DWalletRequest::DKG {
     dwallet_network_encryption_public_key: nek_bytes,
     curve: DWalletCurve::Secp256k1,
     centralized_public_key_share_and_proof: user_share,
-    encrypted_centralized_secret_share_and_proof: encrypted_share,
-    encryption_key: enc_key,
+    // Zero-trust mode. Use UserSecretKeyShare::Public { .. } for trust-minimized.
+    user_secret_key_share: UserSecretKeyShare::Encrypted {
+        encrypted_centralized_secret_share_and_proof: encrypted_share,
+        encryption_key: enc_key,
+        signer_public_key: signer_pk,
+    },
     user_public_output: user_output,
-    signer_public_key: signer_pk,
+    // Set to Some(SignDuringDKGRequest { .. }) to atomically sign a
+    // message during DKG. `None` for plain DKG.
+    sign_during_dkg_request: None,
 };
 ```
 
@@ -99,7 +134,7 @@ ctx.transfer_dwallet(dwallet, new_authority)?;
 
 ## Supported Curves
 
-| Curve | ID | Key Size | Chains |
+| Curve | ID (u16) | Key Size | Chains |
 |-------|----|----------|--------|
 | Secp256k1 | 0 | 33 bytes (compressed) | Bitcoin, Ethereum, BSC |
 | Secp256r1 | 1 | 33 bytes (compressed) | WebAuthn, Apple Secure Enclave |

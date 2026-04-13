@@ -9,13 +9,20 @@ A **dWallet** is a distributed signing key controlled by a Solana account. The o
 ```
 DWallet account (on Solana):
   authority(32)        -- who can approve signing
-  public_key(65)       -- the dWallet's public key (padded to 65 bytes)
+  curve(2)             -- u16 LE: Secp256k1(0), Secp256r1(1), Curve25519(2), Ristretto(3)
+  state(1)             -- DKGInProgress(0), Active(1), Frozen(2)
   public_key_len(1)    -- actual public key length (32 or 33)
-  curve(1)             -- Secp256k1(0), Secp256r1(1), Curve25519(2), Ristretto(3)
+  public_key(65)       -- the dWallet's public key (padded to 65 bytes)
+  created_epoch(8)     -- epoch when created
+  noa_public_key(32)   -- NOA Ed25519 key used during DKG
   is_imported(1)       -- whether the key was imported (vs created via DKG)
+  bump(1)              -- PDA bump seed
+  _reserved(8)         -- reserved for future use
 ```
 
-A dWallet can sign transactions on **any blockchain** -- Bitcoin, Ethereum, Solana, etc. The curve and signature algorithm determine which chains are compatible.
+Attestation data (DKG output, proofs, etc.) is stored in separate `DWalletAttestation` PDAs, not inline in the DWallet account.
+
+A dWallet can sign transactions on **any blockchain** -- Bitcoin, Ethereum, Solana, etc. The curve and signature scheme determine which chains are compatible.
 
 ## Authority
 
@@ -43,19 +50,22 @@ A **MessageApproval** is a PDA that represents a request to sign a specific mess
 
 ```
 MessageApproval PDA:
-  Seeds: ["message_approval", dwallet_pubkey, message_hash]
+  Seeds: ["dwallet", chunks..., "message_approval", &scheme_u16_le, &message_digest, [&meta_digest]]
   Program: DWALLET_PROGRAM_ID
 
 Fields:
-  dwallet(32)            -- the dWallet to sign with
-  message_hash(32)       -- hash of the message to sign
-  user_pubkey(32)        -- user's public key
-  signature_scheme(1)    -- Ed25519(0), Secp256k1(1), Secp256r1(2)
-  caller_program(32)     -- which program approved this
-  cpi_authority(32)      -- the CPI authority PDA that signed
-  status(1)              -- Pending(0) or Signed(1)
-  signature_len(2)       -- length of signature bytes
-  signature(128)         -- the produced signature (padded)
+  dwallet(32)                -- the dWallet to sign with
+  message_digest(32)         -- keccak256 digest of the message
+  message_metadata_digest(32) -- keccak256 digest of metadata (zero if none)
+  approver(32)               -- dWallet authority who authorized signing
+  user_pubkey(32)            -- user's public key
+  signature_scheme(2)        -- DWalletSignatureScheme (u16 LE, values 0-6)
+  epoch(8)                   -- epoch when approved
+  status(1)                  -- Pending(0) or Signed(1)
+  signature_len(2)           -- length of signature bytes
+  signature(128)             -- the produced signature (padded)
+  bump(1)                    -- PDA bump
+  _reserved(8)               -- reserved
 ```
 
 The Ika network monitors for new `MessageApproval` accounts and produces signatures for those with status = Pending.
@@ -68,74 +78,61 @@ The NOA:
 - Initializes the dWallet program state (DWalletCoordinator, NetworkEncryptionKey)
 - Commits new dWallets after DKG (`CommitDWallet`)
 - Commits signatures after signing (`CommitSignature`)
-- Allocates presigns
+- Commits attestation PDAs (`CommitFutureSign`, `CommitEncryptedUserSecretKeyShare`, `CommitPublicUserSecretKeyShare`)
+- Handles network DKG (`CommitNetworkDKG`) and key reconfiguration (`CommitNetworkKeyReconfiguration`)
 
 ## Presign
 
 A **presign** is a precomputed partial signature that speeds up the signing process. Presigns are generated in advance and consumed during signing.
 
 There are two types:
-- **Global presigns** -- can be used with any dWallet (allocated via `Presign` request)
-- **dWallet-specific presigns** -- bound to a specific dWallet (allocated via `PresignForDWallet` request)
+- **Global presigns** -- can be used with any non-imported dWallet (allocated via `Presign` request, uses `signature_algorithm`)
+- **dWallet-specific presigns** -- bound to a specific dWallet by `dwallet_public_key` (allocated via `PresignForDWallet` request, required for imported ECDSA keys)
 
-Presigns are managed via the gRPC API and are invisible to on-chain programs.
+Presigns are managed via the gRPC API and returned as `Attestation(NetworkSignedAttestation)` containing a `VersionedPresignDataAttestation`.
 
 ## Gas Deposit
 
-Programs that use dWallet instructions need sufficient SOL for rent. The payer account in each instruction pays for PDA creation rent. There is no separate deposit system in the pre-alpha -- standard Solana rent rules apply.
+Programs that use dWallet instructions need a `GasDeposit` PDA. The deposit holds:
+- **IKA balance**: For dWallet operation fees (DKG, signing, etc.)
+- **SOL balance**: For NOA write-back transaction costs
 
-## Supported Curves and Signature Algorithms
+Instructions: `CreateDeposit` (36), `TopUp` (37), `SettleGas` (38), `RequestWithdraw` (44), `Withdraw` (45).
 
-| Curve | ID | Description | Mock Support |
-|-------|----|-------------|-------------|
+## Supported Curves and Signature Schemes
+
+| Curve | ID (u16) | Description | Mock DKG |
+|-------|----------|-------------|----------|
 | Secp256k1 | 0 | Bitcoin, Ethereum | Yes |
-| Secp256r1 | 1 | WebAuthn, secure enclaves | Not yet |
+| Secp256r1 | 1 | WebAuthn, secure enclaves | Yes |
 | Curve25519 | 2 | Solana, Sui, general Ed25519 | Yes |
-| Ristretto | 3 | Substrate, Polkadot | Not yet |
+| Ristretto | 3 | Substrate, Polkadot | Yes |
 
-| Algorithm | Compatible Curves | Mock Support |
-|-----------|-------------------|-------------|
-| ECDSASecp256k1 | Secp256k1 | Yes |
-| ECDSASecp256r1 | Secp256r1 | Not yet |
-| Taproot | Secp256k1 | Not yet |
-| EdDSA | Curve25519 | Yes |
-| SchnorrkelSubstrate | Ristretto | Not yet |
+### DWalletSignatureScheme (u16)
 
-Per-variant support depends on the signing curve. The mock requires the
-client to declare a `hash_scheme` that actually applies to the dWallet's
-curve — anything else is rejected at the gRPC layer.
+Combined (algorithm, hash) pair used for signing and message approval:
 
-| Hash Scheme | Description | Secp256k1 | Ed25519 |
-|-------------|-------------|-----------|---------|
-| Keccak256    | Ethereum (EIP-1559) | ✅ Supported | ❌ Rejected |
-| SHA256       | Generic single-SHA256 | ✅ Supported | ❌ Rejected |
-| DoubleSHA256 | Bitcoin BIP143 — `sha256(sha256(preimage))` | ✅ Supported | ❌ Rejected |
-| SHA512       | Ed25519 (RFC 8032 — `SHA-512(R ‖ A ‖ M)`) | ❌ Rejected | ✅ Supported |
-| Merlin       | Schnorrkel / Ristretto | ❌ Rejected | ❌ Rejected |
+| Variant | Index | Curve | Use For |
+|---------|-------|-------|---------|
+| `EcdsaKeccak256` | 0 | Secp256k1 | Ethereum |
+| `EcdsaSha256` | 1 | Secp256k1 / Secp256r1 | Bitcoin (legacy) / WebAuthn |
+| `EcdsaDoubleSha256` | 2 | Secp256k1 | Bitcoin BIP143 |
+| `TaprootSha256` | 3 | Secp256k1 | Bitcoin Taproot (BIP340) |
+| `EcdsaBlake2b256` | 4 | Secp256k1 | Zcash |
+| `EddsaSha512` | 5 | Curve25519 | Ed25519 (Solana, Sui) |
+| `SchnorrkelMerlin` | 6 | Ristretto | Substrate, Polkadot (sr25519) |
 
-> **Note on Secp256k1 signing.** The mock supports `hash_scheme` for Secp256k1
-> requests: it applies the requested hash function to the `message` bytes you
-> sent and signs the resulting 32-byte digest via `sign_prehash` with low-s
-> normalization (BIP146 / EIP-2). This means the produced signatures are
-> **valid on the destination chain** — they will ec_recover correctly on
-> Sepolia, Ethereum mainnet, Bitcoin testnet, etc.
->
-> **Note on Ed25519 signing.** The client must declare `hash_scheme = SHA512`
-> because that's the only hash function the Ed25519 algorithm uses internally
-> (RFC 8032 — `Sign(sk, M) = Ed25519(SHA512(R ‖ A ‖ M))`). The mock doesn't
-> *apply* the SHA-512 itself (the `ed25519-dalek` crate handles that
-> internally), but it requires the client to pass it explicitly so the wire
-> request unambiguously says "this is Ed25519 with its standard hash."
->
-> Hash schemes that don't apply to the dWallet's curve are rejected at the
-> gRPC layer — the mock returns `TransactionResponseData::Error` and the
-> gRPC call itself succeeds with the error in the application-level
-> response body, not as an HTTP 5xx.
->
-> The on-chain `MessageApproval.message_hash` (the third PDA seed) is
-> **always `keccak256(preimage)`** regardless of `hash_scheme` — it's a
-> uniqueness key, not the signed digest. The dwallet program uses Solana's
-> cheap on-chain `keccak` syscall and stays chain-agnostic.
+### DWalletSignatureAlgorithm
+
+Used by presign requests (presigns are per-algorithm, not per-scheme):
+
+| Variant | Value | Description |
+|---------|-------|-------------|
+| `ECDSASecp256k1` | 0 | ECDSA on Secp256k1 |
+| `ECDSASecp256r1` | 1 | ECDSA on Secp256r1 |
+| `Taproot` | 2 | Schnorr on Secp256k1 |
+| `EdDSA` | 3 | Ed25519 on Curve25519 |
+| `Schnorrkel` | 4 | sr25519 on Ristretto |
 
 ## DKG (Distributed Key Generation)
 
@@ -147,5 +144,5 @@ DKG is the process of creating a new dWallet. The user and the Ika network joint
 The on-chain flow:
 1. User submits DKG request via gRPC
 2. Network runs 2PC-MPC DKG protocol
-3. NOA calls `CommitDWallet` to create the on-chain dWallet account
+3. NOA calls `CommitDWallet` to create the on-chain dWallet account and its attestation PDA
 4. The dWallet's authority is set to the requesting user

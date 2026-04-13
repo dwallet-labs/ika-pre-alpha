@@ -11,8 +11,13 @@ All account types in the Ika dWallet system. Each account starts with a 2-byte p
 | Discriminator | Account Type |
 |---------------|-------------|
 | 1 | DWalletCoordinator |
+| 2 | DWallet |
 | 3 | NetworkEncryptionKey |
+| 4 | GasDeposit |
+| 9 | PartialUserSignature |
+| 11 | EncryptedUserSecretKeyShare |
 | 14 | MessageApproval |
+| 15 | DWalletAttestation |
 
 ---
 
@@ -24,9 +29,14 @@ Program-wide state. PDA seeds: `["dwallet_coordinator"]`.
 |--------|-------|------|-------------|
 | 0 | discriminator | 1 | `1` |
 | 1 | version | 1 | `1` |
-| 2 | (fields) | 114 | Coordinator state |
+| 2 | authority | 32 | Admin authority pubkey (NOA or multisig) |
+| 34 | epoch | 8 | Current epoch number (LE u64) |
+| 42 | total_dwallets_created | 8 | Total dWallets created (LE u64) |
+| 50 | paused | 1 | Whether program is paused (0=no, 1=yes) |
+| 51 | bump | 1 | PDA bump seed |
+| 52 | _reserved | 64 | Reserved for future use |
 
-**Total: 116 bytes**
+**Total: 116 bytes (2 + 114)**
 
 ---
 
@@ -44,45 +54,186 @@ The network encryption public key used for DKG. PDA seeds: `["network_encryption
 
 ---
 
-### DWallet
+### DWallet (disc 2)
 
-A distributed signing key. PDA seeds: `["dwallet", chunks_of(curve_byte || public_key)]` — the curve byte is concatenated with the raw public key into a single buffer, then split into 32-byte pieces (Solana's `MAX_SEED_LEN`) and each chunk is passed as its own seed. For 32-byte pubkeys (Ed25519/Curve25519/Ristretto) the payload is 33 bytes → `[32, 1]`; for 33-byte compressed SEC1 (Secp256k1/r1) it is 34 bytes → `[32, 2]`.
+A distributed signing key. PDA seeds: `["dwallet", chunks_of(curve_u16_le || public_key)]` -- the curve u16 LE (2 bytes) is concatenated with the raw public key into a single buffer, then split into 32-byte pieces (Solana's `MAX_SEED_LEN`) and each chunk is passed as its own seed.
+
+| pubkey length | payload size | chunks |
+|---|---|---|
+| 32 bytes (Ed25519 / Curve25519 / Ristretto) | 34 bytes | `[32, 2]` |
+| 33 bytes (compressed Secp256k1 / Secp256r1) | 35 bytes | `[32, 3]` |
+| 65 bytes (uncompressed SEC1) | 67 bytes | `[32, 32, 3]` |
 
 | Offset | Field | Size | Description |
 |--------|-------|------|-------------|
-| 0 | discriminator | 1 | Account type |
+| 0 | discriminator | 1 | `2` |
 | 1 | version | 1 | `1` |
 | 2 | authority | 32 | Who can approve messages (user or CPI PDA) |
-| 34 | public_key | 65 | dWallet public key (padded) |
-| 99 | public_key_len | 1 | Actual key length (32 or 33) |
-| 100 | curve | 1 | Curve ID (0=Secp256k1, 1=Secp256r1, 2=Curve25519, 3=Ristretto) |
-| 101 | is_imported | 1 | Whether the key was imported |
+| 34 | curve | 2 | Curve type (u16 LE): 0=Secp256k1, 1=Secp256r1, 2=Curve25519, 3=Ristretto |
+| 36 | state | 1 | 0=DKGInProgress, 1=Active, 2=Frozen |
+| 37 | public_key_len | 1 | Actual key length (32 or 33) |
+| 38 | public_key | 65 | dWallet public key (padded) |
+| 103 | created_epoch | 8 | Epoch when created (LE u64) |
+| 111 | noa_public_key | 32 | NOA Ed25519 public key used during DKG |
+| 143 | is_imported | 1 | Whether the key was imported (0=standard, 1=imported) |
+| 144 | bump | 1 | PDA bump seed |
+| 145 | _reserved | 8 | Reserved for future use |
+
+**Total: 153 bytes (2 + 151)**
+
+---
+
+### DWalletAttestation (disc 15)
+
+Variable-size PDA storing BCS-serialized versioned attestation data + NOA Ed25519 signature. One per type per dWallet. Created by commit instructions (`CommitDWallet`, `CommitFutureSign`, `CommitEncryptedUserSecretKeyShare`, `CommitPublicUserSecretKeyShare`).
+
+| Offset | Field | Size | Description |
+|--------|-------|------|-------------|
+| 0 | discriminator | 1 | `15` |
+| 1 | version | 1 | `1` |
+| 2 | noa_signature | 64 | NOA Ed25519 signature over the attestation data |
+| 66 | bump | 1 | PDA bump seed |
+| 67 | attestation_data | variable | BCS-serialized versioned attestation struct |
+
+**Header: 67 bytes. Total: 67 + len(attestation_data).**
+
+PDA seed patterns by type:
+
+| Type | Seeds |
+|------|-------|
+| DKG | `["dwallet", chunks..., "attestation"]` |
+| MakePublic | `["dwallet", chunks..., "public_user_share"]` |
+| EncryptedShare (ReEncrypt) | `["dwallet", chunks..., "encrypted_user_share", &enc_key, "attestation"]` |
+| FutureSign | `["dwallet", chunks..., "partial_user_sig", &scheme_u16_le, &msg_digest, [&meta_digest], "attestation"]` |
+
+---
+
+### GasDeposit (disc 4)
+
+Per-user gas deposit. PDA seeds: `["gas_deposit", user_pubkey]`.
+
+| Offset | Field | Size | Description |
+|--------|-------|------|-------------|
+| 0 | discriminator | 1 | `4` |
+| 1 | version | 1 | `1` |
+| 2 | user_pubkey | 32 | Ed25519 public key for gRPC auth |
+| 34 | ika_balance | 8 | Available IKA balance (LE u64) |
+| 42 | sol_balance | 8 | Available SOL balance in lamports (LE u64) |
+| 50 | total_ika_deposited | 8 | Lifetime IKA deposited |
+| 58 | total_ika_consumed | 8 | Lifetime IKA consumed |
+| 66 | total_sol_deposited | 8 | Lifetime SOL deposited |
+| 74 | total_sol_consumed | 8 | Lifetime SOL consumed |
+| 82 | pending_ika_withdrawal | 8 | Pending IKA withdrawal amount |
+| 90 | pending_sol_withdrawal | 8 | Pending SOL withdrawal amount |
+| 98 | withdrawal_epoch | 8 | Epoch when withdrawal becomes available (0=none) |
+| 106 | last_settlement_epoch | 8 | Epoch of last gas settlement |
+| 114 | created_at_epoch | 8 | Epoch when created |
+| 122 | bump | 1 | PDA bump seed |
+| 123 | _reserved | 16 | Reserved |
+
+**Total: 139 bytes (2 + 137)**
 
 ---
 
 ### MessageApproval (disc 14)
 
-A signing request. PDA seeds: `["message_approval", dwallet, message_hash]`.
+A signing request. PDA seeds: `["dwallet", chunks..., "message_approval", &scheme_u16_le, &message_digest, [&message_metadata_digest]]`.
+
+The `message_metadata_digest` seed is only included when non-zero.
 
 | Offset | Field | Size | Description |
 |--------|-------|------|-------------|
 | 0 | discriminator | 1 | `14` |
 | 1 | version | 1 | `1` |
 | 2 | dwallet | 32 | dWallet account pubkey |
-| 34 | message_hash | 32 | Hash of message to sign |
-| 66 | user_pubkey | 32 | User public key |
-| 98 | signature_scheme | 1 | Ed25519(0), Secp256k1(1), Secp256r1(2) |
-| 99 | caller_program | 32 | Program that approved this |
-| 131 | cpi_authority | 32 | CPI authority PDA that signed |
-| 139 | status | 1 | Pending(0) or Signed(1) |
-| 140 | signature_len | 2 | Signature byte count (LE u16) |
-| 142 | signature | 128 | Signature bytes (padded) |
+| 34 | message_digest | 32 | Keccak-256 digest of message to sign |
+| 66 | message_metadata_digest | 32 | Keccak-256 digest of metadata (zero if none) |
+| 98 | approver | 32 | dWallet authority who authorized signing |
+| 130 | user_pubkey | 32 | User public key authorized for gRPC Sign |
+| 162 | signature_scheme | 2 | DWalletSignatureScheme (u16 LE, values 0-6) |
+| 164 | epoch | 8 | Epoch when approved (LE u64) |
+| 172 | status | 1 | Pending(0) or Signed(1) |
+| 173 | signature_len | 2 | Signature byte count (LE u16) |
+| 175 | signature | 128 | Signature bytes (padded) |
+| 303 | bump | 1 | PDA bump seed |
+| 304 | _reserved | 8 | Reserved |
 
-**Total: 287 bytes (2 + 285)**
+**Total: 312 bytes (2 + 310)**
 
 Status values:
 - `0` = PENDING -- awaiting signature from the network
 - `1` = SIGNED -- signature is available
+
+---
+
+### PartialUserSignature (disc 9)
+
+Partial user signature for the FutureSign flow. PDA seeds: `["dwallet", chunks..., "partial_user_sig", &scheme_u16_le, &message_digest, [&message_metadata_digest]]`.
+
+The `message_metadata_digest` seed is only included when non-zero.
+
+| Offset | Field | Size | Description |
+|--------|-------|------|-------------|
+| 0 | discriminator | 1 | `9` |
+| 1 | version | 1 | `1` |
+| 2 | dwallet | 32 | dWallet account pubkey |
+| 34 | completion_authority | 32 | Authority that can complete the signature |
+| 66 | message_digest | 32 | Keccak-256 digest of message |
+| 98 | message_metadata_digest | 32 | Keccak-256 digest of metadata (zero if none) |
+| 130 | signature_scheme | 2 | DWalletSignatureScheme (u16 LE) |
+| 132 | partial_signature_len | 2 | Length of partial signature data (LE u16) |
+| 134 | partial_signature | 256 | Partial signature from user |
+| 390 | presign_id | 32 | Presign ID used |
+| 422 | created_epoch | 8 | Epoch when created (LE u64) |
+| 430 | status | 1 | Pending(0) or Signed(1) |
+| 431 | signature_len | 2 | Final MPC signature length (LE u16) |
+| 433 | signature | 128 | Final MPC signature (written by NOA) |
+| 561 | bump | 1 | PDA bump seed |
+| 562 | _reserved | 8 | Reserved |
+
+**Total: 570 bytes (2 + 568)**
+
+---
+
+### EncryptedUserSecretKeyShare (disc 11)
+
+Metadata for an encrypted user secret key share. PDA seeds: `["dwallet", chunks..., "encrypted_user_share", &encryption_key]`.
+
+Attestation data is stored in a separate `DWalletAttestation` PDA rooted under this share's seed hierarchy.
+
+| Offset | Field | Size | Description |
+|--------|-------|------|-------------|
+| 0 | discriminator | 1 | `11` |
+| 1 | version | 1 | `1` |
+| 2 | dwallet | 32 | dWallet account pubkey |
+| 34 | encryption_key | 32 | Encryption key pubkey |
+| 66 | encryption_key_owner | 32 | Address of encryption key owner |
+| 98 | source_share | 32 | Source share pubkey (zero if DKG-created) |
+| 130 | is_re_encrypted | 1 | 0=DKG, 1=re-encrypted |
+| 131 | created_epoch | 8 | Epoch when created (LE u64) |
+| 139 | bump | 1 | PDA bump seed |
+| 140 | _reserved | 8 | Reserved |
+
+**Total: 148 bytes (2 + 146)**
+
+---
+
+## PDA Seed Hierarchy
+
+All dWallet-derived PDAs are rooted from the dWallet's `["dwallet", chunks(curve_u16_le || pk)]` prefix:
+
+| Account | Full PDA Seeds |
+|---------|---------------|
+| DWallet | `["dwallet", chunks...]` |
+| DKG attestation | `["dwallet", chunks..., "attestation"]` |
+| MakePublic attestation | `["dwallet", chunks..., "public_user_share"]` |
+| EncryptedShare | `["dwallet", chunks..., "encrypted_user_share", &enc_key]` |
+| ReEncrypt attestation | `["dwallet", chunks..., "encrypted_user_share", &enc_key, "attestation"]` |
+| MessageApproval | `["dwallet", chunks..., "message_approval", &scheme_u16_le, &message_digest, [&meta_digest]]` |
+| PartialUserSignature | `["dwallet", chunks..., "partial_user_sig", &scheme_u16_le, &message_digest, [&meta_digest]]` |
+| FutureSign attestation | `["dwallet", chunks..., "partial_user_sig", &scheme_u16_le, &msg_digest, [&meta_digest], "attestation"]` |
+
+The `[&meta_digest]` notation means the seed is only included when the message metadata digest is non-zero.
 
 ---
 
@@ -182,11 +333,66 @@ PDA seeds: `["vote", proposal_id, voter]`. Total: **69 bytes**.
 | Account | Disc | Type | Size | PDA Seeds | Program |
 |---------|------|------|------|-----------|---------|
 | DWalletCoordinator | 1 | PDA | 116 | `["dwallet_coordinator"]` | dWallet |
+| DWallet | 2 | PDA | 153 | `["dwallet", chunks(curve_u16_le \|\| pk)]` | dWallet |
 | NetworkEncryptionKey | 3 | PDA | 164 | `["network_encryption_key", noa]` | dWallet |
-| MessageApproval | 14 | PDA | 287 | `["message_approval", dwallet, hash]` | dWallet |
+| GasDeposit | 4 | PDA | 139 | `["gas_deposit", user_pubkey]` | dWallet |
+| PartialUserSignature | 9 | PDA | 570 | `["dwallet", chunks..., "partial_user_sig", ...]` | dWallet |
+| EncryptedUserSecretKeyShare | 11 | PDA | 148 | `["dwallet", chunks..., "encrypted_user_share", &enc_key]` | dWallet |
+| MessageApproval | 14 | PDA | 312 | `["dwallet", chunks..., "message_approval", ...]` | dWallet |
+| DWalletAttestation | 15 | PDA | 67+ | `["dwallet", chunks..., <type-label>]` | dWallet |
 | SystemState | 1 | PDA | 365 | `["ika_system_state"]` | Ika System |
 | Validator | 2 | PDA | 973 | `["validator", identity]` | Ika System |
 | StakeAccount | 3 | PDA | 115 | `["stake_account", stake_id]` | Ika System |
 | ValidatorList | 4 | PDA | 18+ | `["validator_list"]` | Ika System |
 | Proposal | 1 | PDA | 195 | `["proposal", id]` | Voting example |
 | VoteRecord | 2 | PDA | 69 | `["vote", id, voter]` | Voting example |
+
+## Instruction Discriminators
+
+| Instruction | Disc | Description |
+|-------------|------|-------------|
+| CreateDKGRequest | 0 | |
+| CompleteDKGFirstRound | 1 | |
+| SubmitUserDKGVerification | 2 | |
+| CompleteDKG | 3 | |
+| RejectDKG | 4 | |
+| CreateImportedKeyDKGRequest | 5 | |
+| CompleteImportedKeyVerification | 6 | |
+| RejectImportedKeyVerification | 7 | |
+| ApproveMessage | 8 | |
+| CreatePresignRequest | 11 | |
+| CompletePresign | 12 | |
+| RejectPresign | 13 | |
+| CreatePartialUserSignature | 14 | |
+| VerifyPartialUserSignature | 15 | |
+| RejectPartialUserSignature | 16 | |
+| CreateEncryptionKey | 17 | |
+| CreateEncryptedShare | 18 | |
+| VerifyEncryptedShare | 19 | |
+| RejectEncryptedShare | 20 | |
+| AcceptEncryptedShare | 21 | |
+| MakeUserSecretKeySharePublic | 22 | |
+| VerifyMakePublic | 23 | |
+| TransferOwnership | 24 | |
+| CreateSigningDelegation | 25 | |
+| CloseSigningDelegation | 26 | |
+| RequestNetworkDKG | 27 | |
+| CommitNetworkDKG | 28 | NOA commits network DKG result |
+| RequestNetworkKeyReconfiguration | 29 | |
+| CommitNetworkKeyReconfiguration | 30 | NOA commits key reconfiguration |
+| CommitDWallet | 31 | NOA commits DKG result (creates DWallet + attestation PDA) |
+| CommitFutureSign | 33 | NOA commits FutureSign (creates attestation PDA) |
+| CommitEncryptedUserSecretKeyShare | 34 | NOA commits encrypted share (creates attestation PDA) |
+| CommitPublicUserSecretKeyShare | 35 | NOA commits public share (creates attestation PDA) |
+| CreateDeposit | 36 | |
+| TopUp | 37 | |
+| SettleGas | 38 | |
+| UpdateFees | 39 | |
+| PauseCurve | 40 | |
+| UnpauseCurve | 41 | |
+| TransferFutureSign | 42 | |
+| CommitSignature | 43 | NOA writes signature (dispatches to MessageApproval or PartialUserSignature by discriminator) |
+| RequestWithdraw | 44 | |
+| Withdraw | 45 | |
+| Initialize | 46 | |
+| EmitEvent | 228 | Self-CPI event handler |

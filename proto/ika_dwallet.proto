@@ -1,15 +1,15 @@
 // Copyright (c) dWallet Labs, Ltd.
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 
-// gRPC dWallet Signing Service -- single SubmitTransaction RPC.
+// gRPC dWallet Signing Service — single SubmitTransaction RPC.
 // Request type is inside the BCS-serialized signed payload (DWalletRequest enum variant).
 
 syntax = "proto3";
 package ika.dwallet.v1;
 
-// ===================================================================
+// ═══════════════════════════════════════════════════════════════════════
 // Service
-// ===================================================================
+// ═══════════════════════════════════════════════════════════════════════
 
 service DWalletService {
   // Submit any dWallet operation (DKG, sign, presign, etc.).
@@ -24,9 +24,9 @@ service DWalletService {
   rpc GetPresignsForDWallet(GetPresignsForDWalletRequest) returns (GetPresignsResponse);
 }
 
-// ===================================================================
+// ═══════════════════════════════════════════════════════════════════════
 // Authentication
-// ===================================================================
+// ═══════════════════════════════════════════════════════════════════════
 
 // All mutation requests are wrapped in UserSignedRequest.
 // The UserSignature is self-contained: it carries both the signature bytes
@@ -42,19 +42,19 @@ message UserSignedRequest {
   bytes signed_request_data = 2;
 }
 
-// ===================================================================
+// ═══════════════════════════════════════════════════════════════════════
 // Responses
-// ===================================================================
+// ═══════════════════════════════════════════════════════════════════════
 
-// Response for SubmitTransaction -- wraps BCS-serialized TransactionResponseData.
+// Response for SubmitTransaction — wraps BCS-serialized TransactionResponseData.
 message TransactionResponse {
   // BCS-serialized TransactionResponseData enum (Signature, Attestation, Presign, or Error).
   bytes response_data = 1;
 }
 
-// ===================================================================
+// ═══════════════════════════════════════════════════════════════════════
 // Presign query messages
-// ===================================================================
+// ═══════════════════════════════════════════════════════════════════════
 
 message GetPresignsRequest {
   bytes user_pubkey = 1;

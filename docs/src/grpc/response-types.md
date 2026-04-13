@@ -9,26 +9,18 @@ The `SubmitTransaction` RPC returns a `TransactionResponse` containing BCS-seria
 ```rust
 pub enum TransactionResponseData {
     Signature { signature: Vec<u8> },
-    Attestation {
-        attestation_data: Vec<u8>,
-        network_signature: Vec<u8>,
-        network_pubkey: Vec<u8>,
-        epoch: u64,
-    },
-    Presign {
-        presign_id: Vec<u8>,
-        presign_data: Vec<u8>,
-        epoch: u64,
-    },
+    Attestation(NetworkSignedAttestation),
     Error { message: String },
 }
 ```
+
+Three variants only. Presigns are now NOA-signed and flow through `Attestation` -- there is no separate `Presign` variant.
 
 ## Response Variants
 
 ### Signature
 
-Returned for `Sign` and `ImportedKeySign` requests.
+Returned for `Sign`, `ImportedKeySign`, `SignWithPartialUserSig`, and `ImportedKeySignWithPartialUserSig` requests.
 
 ```rust
 TransactionResponseData::Signature {
@@ -41,52 +33,42 @@ TransactionResponseData::Signature {
 | `signature` | `Vec<u8>` | The completed digital signature |
 
 The signature is always 64 bytes:
-- **ECDSASecp256k1 / ECDSASecp256r1**: 64 bytes (r || s)
-- **Taproot**: 64 bytes (Schnorr signature)
+- **ECDSA (Secp256k1 / Secp256r1)**: 64 bytes (r || s)
+- **Taproot (BIP340)**: 64 bytes (Schnorr signature)
 - **EdDSA**: 64 bytes (Ed25519 signature)
-- **SchnorrkelSubstrate**: 64 bytes
+- **Schnorrkel**: 64 bytes (sr25519 signature)
 
 ### Attestation
 
-Returned for `DKG` and `DKGWithPublicShare` requests.
+Returned for all state-creating operations: `DKG`, `ImportedKeyVerification`, `Presign`, `PresignForDWallet`, `FutureSign`, `ReEncryptShare`, and `MakeSharePublic`.
 
 ```rust
-TransactionResponseData::Attestation {
-    attestation_data: Vec<u8>,     // DKG output data
-    network_signature: Vec<u8>,    // NOA signature over the attestation
-    network_pubkey: Vec<u8>,       // NOA public key
-    epoch: u64,                     // Epoch of the attestation
+TransactionResponseData::Attestation(NetworkSignedAttestation)
+
+pub struct NetworkSignedAttestation {
+    pub attestation_data: Vec<u8>,     // BCS-serialized per-type versioned attestation struct
+    pub network_signature: Vec<u8>,    // NOA Ed25519 signature over attestation_data
+    pub network_pubkey: Vec<u8>,       // NOA public key
+    pub epoch: u64,                     // Epoch of the attestation
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `attestation_data` | `Vec<u8>` | The DKG output (public key, proofs, etc.) |
-| `network_signature` | `Vec<u8>` | NOA's signature attesting to the output |
+| `attestation_data` | `Vec<u8>` | BCS-serialized per-type versioned struct (see below) |
+| `network_signature` | `Vec<u8>` | NOA's Ed25519 signature attesting to the output |
 | `network_pubkey` | `Vec<u8>` | NOA's public key for verification |
 | `epoch` | `u64` | Ika epoch when the attestation was produced |
 
-The `attestation_data` + `network_signature` are passed to the `CommitDWallet` on-chain instruction to create the dWallet account.
+The `attestation_data` bytes decode to a per-type versioned struct based on the originating request:
 
-### Presign
-
-Returned for `Presign` and `PresignForDWallet` requests.
-
-```rust
-TransactionResponseData::Presign {
-    presign_id: Vec<u8>,     // Unique presign identifier
-    presign_data: Vec<u8>,   // Precomputed signing data
-    epoch: u64,               // Epoch of the presign
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `presign_id` | `Vec<u8>` | Unique identifier for this presign |
-| `presign_data` | `Vec<u8>` | Precomputed data used during signing |
-| `epoch` | `u64` | Ika epoch when the presign was created |
-
-Store the `presign_id` -- you will pass it to `Sign` requests later.
+| Request | Attestation Type | Description |
+|---------|-----------------|-------------|
+| DKG / ImportedKeyVerification | `VersionedDWalletDataAttestation` | DKG output (public key, proofs, etc.) |
+| Presign / PresignForDWallet | `VersionedPresignDataAttestation` | Presign session identifier + data |
+| FutureSign | `VersionedPartialUserSignatureAttestation` | Verified partial user signature |
+| ReEncryptShare | `VersionedEncryptedUserKeyShareAttestation` | Re-encrypted share data |
+| MakeSharePublic | `VersionedPublicUserKeyShareAttestation` | Public user share data |
 
 ### Error
 
@@ -100,10 +82,110 @@ TransactionResponseData::Error {
 
 Always check for the `Error` variant before processing the response.
 
+## Per-Type Versioned Attestation Structs
+
+Each operation type has its own versioned BCS enum. The same `(attestation_data, network_signature)` pair is stored on-chain (in the corresponding PDA) and returned via gRPC.
+
+### VersionedDWalletDataAttestation
+
+For DKG and ImportedKeyVerification results.
+
+```rust
+pub enum VersionedDWalletDataAttestation {
+    V1(DWalletDataAttestationV1),
+}
+
+pub struct DWalletDataAttestationV1 {
+    pub session_identifier: [u8; 32],
+    pub intended_chain_sender: Vec<u8>,
+    pub curve: DWalletCurve,
+    pub public_key: Vec<u8>,
+    pub public_output: Vec<u8>,
+    pub is_imported_key: bool,
+    pub sign_during_dkg_signature: Option<Vec<u8>>,
+}
+```
+
+### VersionedPresignDataAttestation
+
+For Presign and PresignForDWallet results.
+
+```rust
+pub enum VersionedPresignDataAttestation {
+    V1(PresignDataAttestationV1),
+}
+
+pub struct PresignDataAttestationV1 {
+    pub session_identifier: [u8; 32],
+    pub epoch: u64,
+    pub presign_session_identifier: Vec<u8>,
+    pub presign_data: Vec<u8>,
+    pub curve: DWalletCurve,
+    pub signature_algorithm: DWalletSignatureAlgorithm,
+    pub dwallet_public_key: Option<Vec<u8>>,  // None for global, Some for dWallet-specific
+    pub user_pubkey: Vec<u8>,
+}
+```
+
+Note: `signature_algorithm` (not `signature_scheme`). `dwallet_public_key` (not `dwallet_id`).
+
+### VersionedPartialUserSignatureAttestation
+
+For FutureSign results.
+
+```rust
+pub enum VersionedPartialUserSignatureAttestation {
+    V1(PartialUserSignatureAttestationV1),
+}
+
+pub struct PartialUserSignatureAttestationV1 {
+    pub session_identifier: [u8; 32],
+    pub intended_chain_sender: Vec<u8>,
+    pub dwallet_public_key: Vec<u8>,
+    pub presign_session_identifier: Vec<u8>,
+    pub message: Vec<u8>,
+    pub signature_scheme: DWalletSignatureScheme,
+}
+```
+
+### VersionedEncryptedUserKeyShareAttestation
+
+For ReEncryptShare results.
+
+```rust
+pub enum VersionedEncryptedUserKeyShareAttestation {
+    V1(EncryptedUserKeyShareAttestationV1),
+}
+
+pub struct EncryptedUserKeyShareAttestationV1 {
+    pub session_identifier: [u8; 32],
+    pub intended_chain_sender: Vec<u8>,
+    pub dwallet_public_key: Vec<u8>,
+    pub encrypted_centralized_secret_share_and_proof: Vec<u8>,
+}
+```
+
+### VersionedPublicUserKeyShareAttestation
+
+For MakeSharePublic results.
+
+```rust
+pub enum VersionedPublicUserKeyShareAttestation {
+    V1(PublicUserKeyShareAttestationV1),
+}
+
+pub struct PublicUserKeyShareAttestationV1 {
+    pub session_identifier: [u8; 32],
+    pub intended_chain_sender: Vec<u8>,
+    pub dwallet_public_key: Vec<u8>,
+    pub public_user_secret_key_share: Vec<u8>,
+}
+```
+
 ## Deserialization Example
 
 ```rust
-use ika_dwallet_types::TransactionResponseData;
+use ika_dwallet_types::{TransactionResponseData, NetworkSignedAttestation};
 
 let response = client.submit_transaction(request).await?;
 let result: TransactionResponseData = bcs::from_bytes(&response.into_inner().response_data)?;
@@ -112,12 +194,11 @@ match result {
     TransactionResponseData::Signature { signature } => {
         println!("Got signature: {} bytes", signature.len());
     }
-    TransactionResponseData::Attestation { attestation_data, network_signature, .. } => {
-        println!("DKG complete, attestation: {} bytes", attestation_data.len());
-        // Submit CommitDWallet on-chain with attestation_data + network_signature
-    }
-    TransactionResponseData::Presign { presign_id, .. } => {
-        println!("Presign allocated: {}", hex::encode(&presign_id));
+    TransactionResponseData::Attestation(NetworkSignedAttestation {
+        attestation_data, network_signature, epoch, ..
+    }) => {
+        println!("Attestation: {} bytes, epoch {}", attestation_data.len(), epoch);
+        // Submit on-chain (e.g. CommitDWallet) or decode per-type struct
     }
     TransactionResponseData::Error { message } => {
         eprintln!("Error: {message}");

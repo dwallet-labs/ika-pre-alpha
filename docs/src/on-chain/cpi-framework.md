@@ -44,33 +44,36 @@ The dWallet program verifies this derivation during CPI calls.
 
 ### approve_message
 
-Creates a `MessageApproval` PDA requesting a signature.
+Creates a `MessageApproval` PDA requesting a signature. The first account is the `DWalletCoordinator` PDA (used to read the current epoch).
 
 ```rust
 ctx.approve_message(
+    coordinator,        // readonly -- DWalletCoordinator PDA (for epoch)
     message_approval,   // writable, empty -- PDA to create
     dwallet,            // readonly -- the dWallet account
     payer,              // writable, signer -- rent payer
     system_program,     // readonly -- system program
-    message_hash,       // [u8; 32] -- hash of message to sign
+    message_digest,     // [u8; 32] -- keccak256 hash of message
+    message_metadata_digest, // [u8; 32] -- keccak256 hash of metadata (zero if none)
     user_pubkey,        // [u8; 32] -- user public key
-    signature_scheme,   // u8 -- Ed25519(0), Secp256k1(1), Secp256r1(2)
+    signature_scheme,   // u16 -- DWalletSignatureScheme value (0-6)
     bump,               // u8 -- MessageApproval PDA bump
 )?;
 ```
 
-**CPI instruction data:** `[8, bump, message_hash(32), user_pubkey(32), signature_scheme]` = 67 bytes.
+**CPI instruction data:** `[8, bump, message_digest(32), message_metadata_digest(32), user_pubkey(32), signature_scheme(2)]` = 100 bytes.
 
 **CPI accounts:**
 
 | # | Account | W | S |
 |---|---------|---|---|
-| 0 | message_approval | yes | no |
-| 1 | dwallet | no | no |
-| 2 | caller_program | no | no |
-| 3 | cpi_authority | no | yes |
-| 4 | payer | yes | yes |
-| 5 | system_program | no | no |
+| 0 | coordinator | no | no |
+| 1 | message_approval | yes | no |
+| 2 | dwallet | no | no |
+| 3 | caller_program | no | no |
+| 4 | cpi_authority | no | yes |
+| 5 | payer | yes | yes |
+| 6 | system_program | no | no |
 
 ### transfer_dwallet
 
@@ -140,4 +143,11 @@ The dWallet program verifies:
 |-------------|---------------|
 | `approve_message` | 8 |
 | `transfer_ownership` | 24 |
+| `commit_network_dkg` | 28 |
+| `commit_network_key_reconfiguration` | 30 |
+| `commit_dwallet` | 31 |
+| `commit_future_sign` | 33 |
+| `commit_encrypted_user_secret_key_share` | 34 |
+| `commit_public_user_secret_key_share` | 35 |
 | `transfer_future_sign` | 42 |
+| `commit_signature` | 43 |

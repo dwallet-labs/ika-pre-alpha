@@ -60,6 +60,17 @@ const DWalletHashScheme = bcs.enum("DWalletHashScheme", {
   Merlin: null,
 });
 
+// Combined (algorithm, hash) pair — the on-wire signature scheme.
+const DWalletSignatureScheme = bcs.enum("DWalletSignatureScheme", {
+  EcdsaKeccak256: null,
+  EcdsaSha256: null,
+  EcdsaDoubleSha256: null,
+  TaprootSha256: null,
+  EcdsaBlake2b256: null,
+  EddsaSha512: null,
+  SchnorrkelMerlin: null,
+});
+
 const ApprovalProof = bcs.enum("ApprovalProof", {
   Solana: bcs.struct("ApprovalProofSolana", {
     transaction_signature: bcs.vector(bcs.u8()),
@@ -85,56 +96,106 @@ const UserSignature = bcs.enum("UserSignature", {
   }),
 });
 
+const NetworkSignedAttestation = bcs.struct("NetworkSignedAttestation", {
+  attestation_data: bcs.vector(bcs.u8()),
+  network_signature: bcs.vector(bcs.u8()),
+  network_pubkey: bcs.vector(bcs.u8()),
+  epoch: bcs.u64(),
+});
+
+const SignDuringDKGRequest = bcs.struct("SignDuringDKGRequest", {
+  presign_session_identifier: bcs.vector(bcs.u8()),
+  presign: bcs.vector(bcs.u8()),
+  signature_scheme: DWalletSignatureScheme,
+  message: bcs.vector(bcs.u8()),
+  message_metadata: bcs.vector(bcs.u8()),
+  message_centralized_signature: bcs.vector(bcs.u8()),
+});
+
+const UserSecretKeyShare = bcs.enum("UserSecretKeyShare", {
+  Encrypted: bcs.struct("UserSecretKeyShareEncrypted", {
+    encrypted_centralized_secret_share_and_proof: bcs.vector(bcs.u8()),
+    encryption_key: bcs.vector(bcs.u8()),
+    signer_public_key: bcs.vector(bcs.u8()),
+  }),
+  Public: bcs.struct("UserSecretKeySharePublic", {
+    public_user_secret_key_share: bcs.vector(bcs.u8()),
+  }),
+});
+
 const DWalletRequest = bcs.enum("DWalletRequest", {
   DKG: bcs.struct("DKG", {
     dwallet_network_encryption_public_key: bcs.vector(bcs.u8()),
     curve: DWalletCurve,
     centralized_public_key_share_and_proof: bcs.vector(bcs.u8()),
-    encrypted_centralized_secret_share_and_proof: bcs.vector(bcs.u8()),
-    encryption_key: bcs.vector(bcs.u8()),
+    user_secret_key_share: UserSecretKeyShare,
     user_public_output: bcs.vector(bcs.u8()),
-    signer_public_key: bcs.vector(bcs.u8()),
-  }),
-  DKGWithPublicShare: bcs.struct("DKGWithPublicShare", {
-    dwallet_network_encryption_public_key: bcs.vector(bcs.u8()),
-    curve: DWalletCurve,
-    centralized_public_key_share_and_proof: bcs.vector(bcs.u8()),
-    public_user_secret_key_share: bcs.vector(bcs.u8()),
-    signer_public_key: bcs.vector(bcs.u8()),
+    sign_during_dkg_request: bcs.option(SignDuringDKGRequest),
   }),
   Sign: bcs.struct("Sign", {
     message: bcs.vector(bcs.u8()),
-    curve: DWalletCurve,
-    signature_algorithm: DWalletSignatureAlgorithm,
-    hash_scheme: DWalletHashScheme,
-    presign_id: bcs.vector(bcs.u8()),
+    message_metadata: bcs.vector(bcs.u8()),
+    presign_session_identifier: bcs.vector(bcs.u8()),
     message_centralized_signature: bcs.vector(bcs.u8()),
+    dwallet_attestation: NetworkSignedAttestation,
     approval_proof: ApprovalProof,
   }),
   ImportedKeySign: bcs.struct("ImportedKeySign", {
     message: bcs.vector(bcs.u8()),
-    curve: DWalletCurve,
-    signature_algorithm: DWalletSignatureAlgorithm,
-    hash_scheme: DWalletHashScheme,
-    presign_id: bcs.vector(bcs.u8()),
+    message_metadata: bcs.vector(bcs.u8()),
+    presign_session_identifier: bcs.vector(bcs.u8()),
     message_centralized_signature: bcs.vector(bcs.u8()),
+    dwallet_attestation: NetworkSignedAttestation,
     approval_proof: ApprovalProof,
   }),
   Presign: bcs.struct("Presign", {
+    dwallet_network_encryption_public_key: bcs.vector(bcs.u8()),
     curve: DWalletCurve,
     signature_algorithm: DWalletSignatureAlgorithm,
   }),
   PresignForDWallet: bcs.struct("PresignForDWallet", {
-    dwallet_id: bcs.vector(bcs.u8()),
+    dwallet_network_encryption_public_key: bcs.vector(bcs.u8()),
+    dwallet_public_key: bcs.vector(bcs.u8()),
     curve: DWalletCurve,
     signature_algorithm: DWalletSignatureAlgorithm,
   }),
-  ImportedKeyVerification: null,
-  ReEncryptShare: null,
-  MakeSharePublic: null,
-  FutureSign: null,
-  SignWithPartialUserSig: null,
-  ImportedKeySignWithPartialUserSig: null,
+  ImportedKeyVerification: bcs.struct("ImportedKeyVerification", {
+    dwallet_network_encryption_public_key: bcs.vector(bcs.u8()),
+    curve: DWalletCurve,
+    centralized_party_message: bcs.vector(bcs.u8()),
+    user_secret_key_share: UserSecretKeyShare,
+    user_public_output: bcs.vector(bcs.u8()),
+  }),
+  ReEncryptShare: bcs.struct("ReEncryptShare", {
+    dwallet_network_encryption_public_key: bcs.vector(bcs.u8()),
+    dwallet_public_key: bcs.vector(bcs.u8()),
+    dwallet_attestation: NetworkSignedAttestation,
+    encrypted_centralized_secret_share_and_proof: bcs.vector(bcs.u8()),
+    encryption_key: bcs.vector(bcs.u8()),
+  }),
+  MakeSharePublic: bcs.struct("MakeSharePublic", {
+    dwallet_public_key: bcs.vector(bcs.u8()),
+    dwallet_attestation: NetworkSignedAttestation,
+    public_user_secret_key_share: bcs.vector(bcs.u8()),
+  }),
+  FutureSign: bcs.struct("FutureSign", {
+    dwallet_public_key: bcs.vector(bcs.u8()),
+    presign_session_identifier: bcs.vector(bcs.u8()),
+    message: bcs.vector(bcs.u8()),
+    message_metadata: bcs.vector(bcs.u8()),
+    message_centralized_signature: bcs.vector(bcs.u8()),
+    signature_scheme: DWalletSignatureScheme,
+  }),
+  SignWithPartialUserSig: bcs.struct("SignWithPartialUserSig", {
+    partial_user_signature_attestation: NetworkSignedAttestation,
+    dwallet_attestation: NetworkSignedAttestation,
+    approval_proof: ApprovalProof,
+  }),
+  ImportedKeySignWithPartialUserSig: bcs.struct("ImportedKeySignWithPartialUserSig", {
+    partial_user_signature_attestation: NetworkSignedAttestation,
+    dwallet_attestation: NetworkSignedAttestation,
+    approval_proof: ApprovalProof,
+  }),
 });
 
 const SignedRequestData = bcs.struct("SignedRequestData", {
@@ -145,23 +206,45 @@ const SignedRequestData = bcs.struct("SignedRequestData", {
   request: DWalletRequest,
 });
 
+// Three response variants: Signature (self-verifying), Attestation
+// (NOA-signed wrapper covering DKG / FutureSign / ReEncrypt /
+// MakeSharePublic / ImportedKeyVerification AND presigns), Error.
+// `Attestation` carries `NetworkSignedAttestation` directly as a tuple variant.
 const TransactionResponseData = bcs.enum("TransactionResponseData", {
   Signature: bcs.struct("SignatureResponse", {
     signature: bcs.vector(bcs.u8()),
   }),
-  Attestation: bcs.struct("AttestationResponse", {
-    attestation_data: bcs.vector(bcs.u8()),
-    network_signature: bcs.vector(bcs.u8()),
-    network_pubkey: bcs.vector(bcs.u8()),
-    epoch: bcs.u64(),
-  }),
-  Presign: bcs.struct("PresignResponse", {
-    presign_id: bcs.vector(bcs.u8()),
-    presign_data: bcs.vector(bcs.u8()),
-    epoch: bcs.u64(),
-  }),
+  Attestation: NetworkSignedAttestation,
   Error: bcs.struct("ErrorResponse", {
     message: bcs.string(),
+  }),
+});
+
+// Per-type versioned attestation enums for NetworkSignedAttestation.attestation_data.
+// DKG results: decode with `VersionedDWalletDataAttestation.parse(...)`.
+const VersionedDWalletDataAttestation = bcs.enum("VersionedDWalletDataAttestation", {
+  V1: bcs.struct("DWalletDataAttestationV1", {
+    session_identifier: bcs.fixedArray(32, bcs.u8()),
+    intended_chain_sender: bcs.vector(bcs.u8()),
+    curve: DWalletCurve,
+    public_key: bcs.vector(bcs.u8()),
+    public_output: bcs.vector(bcs.u8()),
+    is_imported_key: bcs.bool(),
+    sign_during_dkg_signature: bcs.option(bcs.vector(bcs.u8())),
+  }),
+});
+
+// Presign results: decode with `VersionedPresignDataAttestation.parse(...)`.
+const VersionedPresignDataAttestation = bcs.enum("VersionedPresignDataAttestation", {
+  V1: bcs.struct("PresignDataAttestationV1", {
+    session_identifier: bcs.fixedArray(32, bcs.u8()),
+    epoch: bcs.u64(),
+    presign_session_identifier: bcs.vector(bcs.u8()),
+    presign_data: bcs.vector(bcs.u8()),
+    curve: DWalletCurve,
+    signature_algorithm: DWalletSignatureAlgorithm,
+    dwallet_public_key: bcs.option(bcs.vector(bcs.u8())),
+    user_pubkey: bcs.vector(bcs.u8()),
   }),
 });
 
@@ -297,10 +380,15 @@ export async function setupDWallet(
         dwallet_network_encryption_public_key: Array.from(new Uint8Array(32)),
         curve: { Curve25519: true },
         centralized_public_key_share_and_proof: Array.from(new Uint8Array(32)),
-        encrypted_centralized_secret_share_and_proof: Array.from(new Uint8Array(32)),
-        encryption_key: Array.from(new Uint8Array(32)),
+        user_secret_key_share: {
+          Encrypted: {
+            encrypted_centralized_secret_share_and_proof: Array.from(new Uint8Array(32)),
+            encryption_key: Array.from(new Uint8Array(32)),
+            signer_public_key: Array.from(payer.publicKey.toBytes()),
+          },
+        },
         user_public_output: Array.from(new Uint8Array(32)),
-        signer_public_key: Array.from(payer.publicKey.toBytes()),
+        sign_during_dkg_request: null,
       },
     },
   }).toBytes();
@@ -318,11 +406,19 @@ export async function setupDWallet(
   ok("DKG attestation received");
 
   const attestation = response.Attestation;
-  const dwalletAddr = new Uint8Array(attestation.attestation_data.slice(0, 32));
-  const pkLen = attestation.attestation_data[32];
-  const publicKey = new Uint8Array(
-    attestation.attestation_data.slice(33, 33 + pkLen),
+  // Decode the versioned DWallet data attestation from the signed bytes.
+  const payload = VersionedDWalletDataAttestation.parse(
+    new Uint8Array(attestation.attestation_data),
   );
+  if (!payload.V1) {
+    throw new Error(
+      `unexpected DKG payload variant: ${JSON.stringify(payload)}`,
+    );
+  }
+  const publicKey = new Uint8Array(payload.V1.public_key);
+  // dwalletAddr is now derived from (curve, public_key) by the dwallet PDA
+  // seeds — we don't extract it from the attestation bytes anymore.
+  const dwalletAddr = new Uint8Array(payer.publicKey.toBytes());
 
   val("dWallet address", Buffer.from(dwalletAddr).toString("hex"));
   val("Public key", Buffer.from(publicKey).toString("hex"));
@@ -397,7 +493,8 @@ export async function requestPresign(
     intended_chain_sender: Array.from(payer.publicKey.toBytes()),
     request: {
       PresignForDWallet: {
-        dwallet_id: Array.from(dwalletAddr),
+        dwallet_network_encryption_public_key: Array.from(new Uint8Array(32)),
+        dwallet_public_key: Array.from(dwalletAddr),
         curve: { Curve25519: true },
         signature_algorithm: { EdDSA: true },
       },
@@ -411,10 +508,18 @@ export async function requestPresign(
   );
 
   const response = TransactionResponseData.parse(new Uint8Array(responseBytes));
-  if (!response.Presign) {
+  if (!response.Attestation) {
     throw new Error(`Presign failed: ${JSON.stringify(response)}`);
   }
-  return new Uint8Array(response.Presign.presign_id);
+  const presignPayload = VersionedPresignDataAttestation.parse(
+    new Uint8Array(response.Attestation.attestation_data),
+  );
+  if (!presignPayload.V1) {
+    throw new Error(
+      `unexpected presign payload variant: ${JSON.stringify(presignPayload)}`,
+    );
+  }
+  return new Uint8Array(presignPayload.V1.presign_id);
 }
 
 /**
@@ -436,11 +541,15 @@ export async function requestSign(
     request: {
       Sign: {
         message: Array.from(message),
-        curve: { Curve25519: true },
-        signature_algorithm: { EdDSA: true },
-        hash_scheme: { Keccak256: true },
-        presign_id: Array.from(presignId),
+        message_metadata: [],
+        presign_session_identifier: Array.from(presignId),
         message_centralized_signature: Array.from(new Uint8Array(64)),
+        dwallet_attestation: {
+          attestation_data: Array.from(new Uint8Array(32)),
+          network_signature: Array.from(new Uint8Array(64)),
+          network_pubkey: Array.from(new Uint8Array(32)),
+          epoch: 1n,
+        },
         approval_proof: {
           Solana: {
             transaction_signature: Array.from(

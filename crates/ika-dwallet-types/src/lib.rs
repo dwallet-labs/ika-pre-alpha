@@ -14,21 +14,21 @@
 //! use ika_dwallet_types::*;
 //!
 //! let request = SignedRequestData {
-//!     session_identifier_preimage: dwallet_address,
+//!     session_identifier_preimage: [0u8; 32],
 //!     epoch: 1,
 //!     chain_id: ChainId::Solana,
 //!     intended_chain_sender: payer_pubkey.to_vec(),
-//!     request: DWalletRequest::Sign {
-//!         message: msg.to_vec(),
+//!     request: DWalletRequest::DKG {
+//!         dwallet_network_encryption_public_key: vec![0u8; 32],
 //!         curve: DWalletCurve::Curve25519,
-//!         signature_algorithm: DWalletSignatureAlgorithm::Schnorr,
-//!         hash_scheme: DWalletHashScheme::SHA256,
-//!         presign_id: vec![0u8; 32],
-//!         message_centralized_signature: vec![0u8; 64],
-//!         approval_proof: ApprovalProof::Solana {
-//!             transaction_signature: tx_sig.to_vec(),
-//!             slot: 0,
+//!         centralized_public_key_share_and_proof: vec![0u8; 32],
+//!         user_secret_key_share: UserSecretKeyShare::Encrypted {
+//!             encrypted_centralized_secret_share_and_proof: vec![0u8; 32],
+//!             encryption_key: vec![0u8; 32],
+//!             signer_public_key: payer_pubkey.to_vec(),
 //!         },
+//!         user_public_output: vec![0u8; 32],
+//!         sign_during_dkg_request: None,
 //!     },
 //! };
 //! let bytes = bcs::to_bytes(&request)?;
@@ -36,9 +36,9 @@
 
 use serde::{Deserialize, Serialize};
 
-// ===================================================================
+// ═══════════════════════════════════════════════════════════════════════
 // User authentication types
-// ===================================================================
+// ═══════════════════════════════════════════════════════════════════════
 
 /// Signature scheme identifier.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -50,23 +50,19 @@ pub enum SignatureScheme {
 }
 
 /// Self-contained user signature — carries both the signature and public key.
-///
-/// Following Sui's pattern: each variant contains the signature bytes and
-/// the public key bytes together, so they can't be mismatched. The variant
-/// determines the scheme.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum UserSignature {
     Ed25519 {
-        signature: Vec<u8>,   // 64 bytes
-        public_key: Vec<u8>,  // 32 bytes
+        signature: Vec<u8>,  // 64 bytes
+        public_key: Vec<u8>, // 32 bytes
     },
     Secp256k1 {
-        signature: Vec<u8>,   // 64 bytes
-        public_key: Vec<u8>,  // 33 bytes (compressed)
+        signature: Vec<u8>,  // 64 bytes
+        public_key: Vec<u8>, // 33 bytes (compressed)
     },
     Secp256r1 {
-        signature: Vec<u8>,   // 64 bytes
-        public_key: Vec<u8>,  // 33 bytes (compressed)
+        signature: Vec<u8>,  // 64 bytes
+        public_key: Vec<u8>, // 33 bytes (compressed)
     },
 }
 
@@ -90,9 +86,9 @@ impl UserSignature {
     }
 }
 
-// ===================================================================
+// ═══════════════════════════════════════════════════════════════════════
 // Chain and approval types
-// ===================================================================
+// ═══════════════════════════════════════════════════════════════════════
 
 /// Chain identifier.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -102,9 +98,6 @@ pub enum ChainId {
 }
 
 /// Approval proof for sign operations.
-///
-/// Links an on-chain `MessageApproval` to the gRPC `Sign` request.
-/// Validators verify this proof to confirm the approval exists on-chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ApprovalProof {
     Solana {
@@ -116,13 +109,13 @@ pub enum ApprovalProof {
     },
 }
 
-// ===================================================================
-// Cryptographic parameter enums
-// ===================================================================
+// ═══════════════════════════════════════════════════════════════════════
+// Curve and algorithm types (copied from dwallet-mpc-types)
+// ═══════════════════════════════════════════════════════════════════════
 
-/// Supported elliptic curves for dWallet key generation.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[repr(u8)]
+/// dWallet curve types.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[repr(u16)]
 pub enum DWalletCurve {
     Secp256k1 = 0,
     Secp256r1 = 1,
@@ -130,19 +123,19 @@ pub enum DWalletCurve {
     Ristretto = 3,
 }
 
-/// Signature algorithm to use when signing.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+/// Signature algorithm variants.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[repr(u8)]
 pub enum DWalletSignatureAlgorithm {
     ECDSASecp256k1 = 0,
     ECDSASecp256r1 = 1,
     Taproot = 2,
     EdDSA = 3,
-    SchnorrkelSubstrate = 4,
+    Schnorrkel = 4,
 }
 
-/// Hash scheme to apply to the message before signing.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+/// Hash scheme variants.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[repr(u8)]
 pub enum DWalletHashScheme {
     Keccak256 = 0,
@@ -150,20 +143,69 @@ pub enum DWalletHashScheme {
     DoubleSHA256 = 2,
     SHA512 = 3,
     Merlin = 4,
+    /// BLAKE2b-256 — used by `EcdsaBlake2b256`. Actual personal/salt
+    /// parameters come from `Blake2bMessageMetadata` in `message_metadata`.
+    Blake2b256 = 5,
 }
 
-// ===================================================================
-// Signed request data
-// ===================================================================
+/// Combined (algorithm, hash) pair used by every user-facing gRPC dWallet
+/// operation that touches signing or presigning.
+///
+/// Internally the MPC stack still uses separate `DWalletSignatureAlgorithm`
+/// and `DWalletHashScheme` enums; the boundary converter lives in the
+/// network validator code. This enum is the canonical user-facing form --
+/// it eliminates impossible algo+hash combinations at the type level.
+///
+/// The 7 valid pairs match the dev-branch NOA presign pool layout (one pool
+/// per scheme).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[repr(u16)]
+pub enum DWalletSignatureScheme {
+    /// ECDSA + Keccak-256 -- Ethereum.
+    EcdsaKeccak256 = 0,
+    /// ECDSA + SHA-256 -- generic Bitcoin (legacy), or WebAuthn paired with
+    /// `DWalletCurve::Secp256r1`.
+    EcdsaSha256 = 1,
+    /// ECDSA + double-SHA-256 -- Bitcoin BIP143.
+    EcdsaDoubleSha256 = 2,
+    /// Schnorr + SHA-256 -- Bitcoin Taproot. Secp256k1 only.
+    TaprootSha256 = 3,
+    /// ECDSA + BLAKE2b-256 -- Zcash (with chain-specific personal/salt in message_metadata).
+    EcdsaBlake2b256 = 4,
+    /// EdDSA + SHA-512 -- Ed25519. Curve25519 only (Solana, Sui).
+    EddsaSha512 = 5,
+    /// Schnorrkel + Merlin transcript -- Substrate. Ristretto only.
+    SchnorrkelMerlin = 6,
+}
 
-/// The signed payload — BCS-serialized, covered by `user_signature`.
+/// BLAKE2b-256 configuration metadata. BCS-serialized and sent as
+/// `message_metadata` in Sign requests with `EcdsaBlake2b256` scheme.
 ///
-/// The request type (`DWalletRequest` enum variant) IS part of the signed data
-/// so it cannot be tampered with. The epoch prevents cross-epoch replay attacks.
+/// Example (Zcash): `Blake2bMessageMetadata { personal: b"ZcashSigHash\x00\x00\x00\x00".to_vec(), salt: vec![] }`
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Blake2bMessageMetadata {
+    /// BLAKE2b personalization string (up to 16 bytes).
+    pub personal: Vec<u8>,
+    /// BLAKE2b salt (up to 16 bytes). Empty for most uses.
+    pub salt: Vec<u8>,
+}
+
+/// Schnorrkel signing context metadata. BCS-serialized and sent as
+/// `message_metadata` in Sign requests with `SchnorrkelMerlin` scheme.
 ///
-/// **Important**: For `Sign` requests, `session_identifier_preimage` must be set
-/// to the dWallet address (the 32-byte address from the DKG attestation). The
-/// network uses this to look up the signing key.
+/// Example (Substrate): `SchnorrkelMessageMetadata { context: b"substrate".to_vec() }`
+/// If empty, validators default to `b"substrate"`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SchnorrkelMessageMetadata {
+    /// Signing context bytes (domain separator for Merlin transcript).
+    pub context: Vec<u8>,
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Signed request data
+// ═══════════════════════════════════════════════════════════════════════
+
+/// The signed payload — BCS-serialized, covered by user_signature.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedRequestData {
     pub session_identifier_preimage: [u8; 32],
@@ -173,103 +215,247 @@ pub struct SignedRequestData {
     pub request: DWalletRequest,
 }
 
-/// All dWallet request types as a single enum.
+/// Network-signed attestation — response payload for state-creating operations.
 ///
-/// The variant determines what operation the network performs.
+/// `attestation_data` contains the BCS-serialized bytes of a **per-type
+/// versioned struct** — the caller knows which type based on the request:
+///   - DKG / ImportedKeyVerification -> `VersionedDWalletDataAttestation`
+///   - FutureSign -> `VersionedPartialUserSignatureAttestation`
+///   - ReEncryptShare -> `VersionedEncryptedUserKeyShareAttestation`
+///   - MakeSharePublic -> `VersionedPublicUserKeyShareAttestation`
+///   - Presign / PresignForDWallet -> `VersionedPresignDataAttestation`
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NetworkSignedAttestation {
+    /// BCS-serialized per-type versioned attestation struct.
+    pub attestation_data: Vec<u8>,
+    /// Ed25519 signature from the network-owned address (NOA).
+    pub network_signature: Vec<u8>,
+    /// NOA public key (Ed25519).
+    pub network_pubkey: Vec<u8>,
+    /// Epoch this attestation was produced in.
+    pub epoch: u64,
+}
+
+/// Optional sign-during-DKG request attached to a `DKG` request --
+/// atomically produces a signature using the newly-generated dWallet
+/// without a separate round-trip.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SignDuringDKGRequest {
+    /// Presign session identifier previously obtained via `Presign` / `PresignForDWallet`.
+    pub presign_session_identifier: Vec<u8>,
+    /// Presign material.
+    pub presign: Vec<u8>,
+    /// Combined signature scheme (algorithm + hash).
+    pub signature_scheme: DWalletSignatureScheme,
+    /// Raw message bytes to sign.
+    pub message: Vec<u8>,
+    /// BCS-serialized per-scheme metadata. Empty for most schemes.
+    pub message_metadata: Vec<u8>,
+    /// User's centralized-party partial signature over the message.
+    pub message_centralized_signature: Vec<u8>,
+}
+
+/// User's contribution to DKG, in either zero-trust or trust-minimized mode.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum UserSecretKeyShare {
+    /// Zero-trust mode: secret share encrypted to a recipient encryption key.
+    Encrypted {
+        encrypted_centralized_secret_share_and_proof: Vec<u8>,
+        encryption_key: Vec<u8>,
+        signer_public_key: Vec<u8>,
+    },
+    /// Trust-minimized mode: secret share revealed in the clear.
+    Public {
+        public_user_secret_key_share: Vec<u8>,
+    },
+}
+
+/// All dWallet request types as a single enum.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DWalletRequest {
-    /// Standard distributed key generation.
+    /// Create a new dWallet via DKG.
     DKG {
         dwallet_network_encryption_public_key: Vec<u8>,
         curve: DWalletCurve,
         centralized_public_key_share_and_proof: Vec<u8>,
-        encrypted_centralized_secret_share_and_proof: Vec<u8>,
-        encryption_key: Vec<u8>,
+        user_secret_key_share: UserSecretKeyShare,
         user_public_output: Vec<u8>,
-        signer_public_key: Vec<u8>,
-    },
-    /// DKG with public share (no encryption).
-    DKGWithPublicShare {
-        dwallet_network_encryption_public_key: Vec<u8>,
-        curve: DWalletCurve,
-        centralized_public_key_share_and_proof: Vec<u8>,
-        public_user_secret_key_share: Vec<u8>,
-        signer_public_key: Vec<u8>,
+        sign_during_dkg_request: Option<SignDuringDKGRequest>,
     },
     /// Sign a message using an existing dWallet.
-    ///
-    /// Requires an `ApprovalProof` linking to an on-chain `MessageApproval`.
-    /// Set `session_identifier_preimage` in `SignedRequestData` to the dWallet
-    /// address for key lookup.
     Sign {
         message: Vec<u8>,
-        curve: DWalletCurve,
-        signature_algorithm: DWalletSignatureAlgorithm,
-        hash_scheme: DWalletHashScheme,
-        presign_id: Vec<u8>,
+        /// BCS-serialized per-scheme metadata. Empty for most schemes.
+        message_metadata: Vec<u8>,
+        presign_session_identifier: Vec<u8>,
         message_centralized_signature: Vec<u8>,
+        dwallet_attestation: NetworkSignedAttestation,
         approval_proof: ApprovalProof,
     },
     /// Sign with an imported key.
     ImportedKeySign {
         message: Vec<u8>,
-        curve: DWalletCurve,
-        signature_algorithm: DWalletSignatureAlgorithm,
-        hash_scheme: DWalletHashScheme,
-        presign_id: Vec<u8>,
+        /// BCS-serialized per-scheme metadata. Empty for most schemes.
+        message_metadata: Vec<u8>,
+        presign_session_identifier: Vec<u8>,
         message_centralized_signature: Vec<u8>,
+        dwallet_attestation: NetworkSignedAttestation,
         approval_proof: ApprovalProof,
     },
-    /// Allocate a global presign (usable with any dWallet).
+    /// Allocate a global presign (usable with any non-imported dWallet).
     Presign {
+        dwallet_network_encryption_public_key: Vec<u8>,
         curve: DWalletCurve,
         signature_algorithm: DWalletSignatureAlgorithm,
     },
-    /// Allocate a presign bound to a specific dWallet.
+    /// Allocate a dWallet-specific presign (for imported ECDSA keys).
     PresignForDWallet {
-        dwallet_id: Vec<u8>,
+        dwallet_network_encryption_public_key: Vec<u8>,
+        dwallet_public_key: Vec<u8>,
         curve: DWalletCurve,
         signature_algorithm: DWalletSignatureAlgorithm,
     },
-    /// Imported key verification (not yet implemented).
-    ImportedKeyVerification {},
-    /// Re-encrypt a share (not yet implemented).
-    ReEncryptShare {},
-    /// Make a share public (not yet implemented).
-    MakeSharePublic {},
-    /// Future sign (not yet implemented).
-    FutureSign {},
-    /// Sign with partial user signature (not yet implemented).
-    SignWithPartialUserSig {},
-    /// Imported key sign with partial user signature (not yet implemented).
-    ImportedKeySignWithPartialUserSig {},
+    /// Imported-key dWallet verification.
+    ImportedKeyVerification {
+        dwallet_network_encryption_public_key: Vec<u8>,
+        curve: DWalletCurve,
+        centralized_party_message: Vec<u8>,
+        user_secret_key_share: UserSecretKeyShare,
+        user_public_output: Vec<u8>,
+    },
+    /// Re-encrypt a dWallet's user secret share under a new encryption key.
+    ReEncryptShare {
+        dwallet_network_encryption_public_key: Vec<u8>,
+        dwallet_public_key: Vec<u8>,
+        dwallet_attestation: NetworkSignedAttestation,
+        encrypted_centralized_secret_share_and_proof: Vec<u8>,
+        encryption_key: Vec<u8>,
+    },
+    /// Make a user secret share public (zero-trust -> trust-minimized).
+    MakeSharePublic {
+        dwallet_public_key: Vec<u8>,
+        dwallet_attestation: NetworkSignedAttestation,
+        public_user_secret_key_share: Vec<u8>,
+    },
+    /// Step 1 of two-step conditional signing: create a verified partial
+    /// user signature without an approval proof.
+    FutureSign {
+        dwallet_public_key: Vec<u8>,
+        presign_session_identifier: Vec<u8>,
+        message: Vec<u8>,
+        /// BCS-serialized per-scheme metadata. Empty for most schemes.
+        message_metadata: Vec<u8>,
+        message_centralized_signature: Vec<u8>,
+        signature_scheme: DWalletSignatureScheme,
+    },
+    /// Step 2 of two-step conditional signing.
+    SignWithPartialUserSig {
+        partial_user_signature_attestation: NetworkSignedAttestation,
+        dwallet_attestation: NetworkSignedAttestation,
+        approval_proof: ApprovalProof,
+    },
+    /// Step 2 of two-step conditional signing, imported-key variant.
+    ImportedKeySignWithPartialUserSig {
+        partial_user_signature_attestation: NetworkSignedAttestation,
+        dwallet_attestation: NetworkSignedAttestation,
+        approval_proof: ApprovalProof,
+    },
 }
 
-// ===================================================================
-// Response types
-// ===================================================================
+// ═══════════════════════════════════════════════════════════════════════
+// Per-type versioned attestation structs
+// ═══════════════════════════════════════════════════════════════════════
 
-/// Response to a `SubmitTransaction` RPC.
+/// Attestation for DKG result and imported-key verification.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum VersionedDWalletDataAttestation {
+    V1(DWalletDataAttestationV1),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DWalletDataAttestationV1 {
+    pub session_identifier: [u8; 32],
+    pub intended_chain_sender: Vec<u8>,
+    pub curve: DWalletCurve,
+    pub public_key: Vec<u8>,
+    pub public_output: Vec<u8>,
+    pub is_imported_key: bool,
+    pub sign_during_dkg_signature: Option<Vec<u8>>,
+}
+
+/// Attestation for presign allocation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum VersionedPresignDataAttestation {
+    V1(PresignDataAttestationV1),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PresignDataAttestationV1 {
+    pub session_identifier: [u8; 32],
+    pub epoch: u64,
+    pub presign_session_identifier: Vec<u8>,
+    pub presign_data: Vec<u8>,
+    pub curve: DWalletCurve,
+    pub signature_algorithm: DWalletSignatureAlgorithm,
+    pub dwallet_public_key: Option<Vec<u8>>,
+    pub user_pubkey: Vec<u8>,
+}
+
+/// Attestation for FutureSign step 1 — a verified partial user signature.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum VersionedPartialUserSignatureAttestation {
+    V1(PartialUserSignatureAttestationV1),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PartialUserSignatureAttestationV1 {
+    pub session_identifier: [u8; 32],
+    pub intended_chain_sender: Vec<u8>,
+    pub dwallet_public_key: Vec<u8>,
+    pub presign_session_identifier: Vec<u8>,
+    pub message: Vec<u8>,
+    pub signature_scheme: DWalletSignatureScheme,
+}
+
+/// Attestation for re-encryption of a user secret share.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum VersionedEncryptedUserKeyShareAttestation {
+    V1(EncryptedUserKeyShareAttestationV1),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EncryptedUserKeyShareAttestationV1 {
+    pub session_identifier: [u8; 32],
+    pub intended_chain_sender: Vec<u8>,
+    pub dwallet_public_key: Vec<u8>,
+    pub encrypted_centralized_secret_share_and_proof: Vec<u8>,
+}
+
+/// Attestation for making a user secret share public.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum VersionedPublicUserKeyShareAttestation {
+    V1(PublicUserKeyShareAttestationV1),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PublicUserKeyShareAttestationV1 {
+    pub session_identifier: [u8; 32],
+    pub intended_chain_sender: Vec<u8>,
+    pub dwallet_public_key: Vec<u8>,
+    pub public_user_secret_key_share: Vec<u8>,
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Response types
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Response to a SubmitTransaction RPC.
+///
+/// Three variants: `Signature` (self-verifying), `Attestation` (NOA-signed,
+/// covers all state-creating ops AND presigns), `Error`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TransactionResponseData {
-    /// Sign result — the signature bytes.
     Signature { signature: Vec<u8> },
-    /// State-creating operation result — output + NOA attestation.
-    ///
-    /// For DKG: `attestation_data` contains
-    /// `[dwallet_addr(32) | pk_len(1) | pk_bytes | public_output]`.
-    Attestation {
-        attestation_data: Vec<u8>,
-        network_signature: Vec<u8>,
-        network_pubkey: Vec<u8>,
-        epoch: u64,
-    },
-    /// Presign allocation result.
-    Presign {
-        presign_id: Vec<u8>,
-        presign_data: Vec<u8>,
-        epoch: u64,
-    },
-    /// Error.
+    Attestation(NetworkSignedAttestation),
     Error { message: String },
 }

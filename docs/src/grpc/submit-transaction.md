@@ -92,20 +92,12 @@ Deserialize `response_data` into `TransactionResponseData` to get the result:
 ```rust
 pub enum TransactionResponseData {
     Signature { signature: Vec<u8> },
-    Attestation {
-        attestation_data: Vec<u8>,
-        network_signature: Vec<u8>,
-        network_pubkey: Vec<u8>,
-        epoch: u64,
-    },
-    Presign {
-        presign_id: Vec<u8>,
-        presign_data: Vec<u8>,
-        epoch: u64,
-    },
+    Attestation(NetworkSignedAttestation),
     Error { message: String },
 }
 ```
+
+Three variants only -- presigns now flow through `Attestation(NetworkSignedAttestation)`.
 
 ## Client Usage
 

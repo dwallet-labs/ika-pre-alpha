@@ -8,7 +8,8 @@ import { GrpcWebFetchTransport } from '@protobuf-ts/grpcweb-transport';
 import { DWalletServiceClient } from './generated/grpc-web/ika_dwallet.client.js';
 import { defineBcsTypes } from './bcs-types.js';
 
-const { SignedRequestData, TransactionResponseData, UserSignature } = defineBcsTypes();
+const { SignedRequestData, TransactionResponseData, UserSignature, VersionedDWalletDataAttestation, VersionedPresignDataAttestation } =
+  defineBcsTypes();
 
 export { defineBcsTypes } from './bcs-types.js';
 
@@ -54,21 +55,31 @@ export function createIkaWebClient(baseUrl: string): IkaDWalletWebClient {
           dwallet_network_encryption_public_key: Array.from(new Uint8Array(32)),
           curve: { Curve25519: true },
           centralized_public_key_share_and_proof: Array.from(new Uint8Array(32)),
-          encrypted_centralized_secret_share_and_proof: Array.from(new Uint8Array(32)),
-          encryption_key: Array.from(new Uint8Array(32)),
+          user_secret_key_share: { Encrypted: {
+            encrypted_centralized_secret_share_and_proof: Array.from(new Uint8Array(32)),
+            encryption_key: Array.from(new Uint8Array(32)),
+            signer_public_key: Array.from(senderPubkey),
+          }},
           user_public_output: Array.from(new Uint8Array(32)),
-          signer_public_key: Array.from(senderPubkey),
+          sign_during_dkg_request: null,
         }},
       }).toBytes();
 
       const respBytes = await submit(buildSig(senderPubkey), data);
       const resp = TransactionResponseData.parse(new Uint8Array(respBytes));
       if (!resp.Attestation) throw new Error(`DKG failed: ${JSON.stringify(resp)}`);
-      const att = resp.Attestation.attestation_data;
-      const pkLen = att[32];
+      // Decode the versioned DWallet data attestation from the signed bytes.
+      const payload = VersionedDWalletDataAttestation.parse(
+        new Uint8Array(resp.Attestation.attestation_data),
+      );
+      if (!payload.V1) {
+        throw new Error(`unexpected DKG payload variant: ${JSON.stringify(payload)}`);
+      }
+      // dwalletAddr is now derived from (curve, public_key) on-chain via
+      // the dwallet PDA seeds; placeholder for now.
       return {
-        dwalletAddr: new Uint8Array(att.slice(0, 32)),
-        publicKey: new Uint8Array(att.slice(33, 33 + pkLen)),
+        dwalletAddr: new Uint8Array(32),
+        publicKey: new Uint8Array(payload.V1.public_key),
       };
     },
 
@@ -78,15 +89,22 @@ export function createIkaWebClient(baseUrl: string): IkaDWalletWebClient {
         epoch: 1n, chain_id: { Solana: true },
         intended_chain_sender: Array.from(senderPubkey),
         request: { PresignForDWallet: {
-          dwallet_id: Array.from(dwalletAddr), curve: { Curve25519: true },
+          dwallet_network_encryption_public_key: Array.from(new Uint8Array(32)),
+          dwallet_public_key: Array.from(dwalletAddr), curve: { Curve25519: true },
           signature_algorithm: { EdDSA: true },
         }},
       }).toBytes();
 
       const respBytes = await submit(buildSig(senderPubkey), data);
       const resp = TransactionResponseData.parse(new Uint8Array(respBytes));
-      if (!resp.Presign) throw new Error(`Presign failed: ${JSON.stringify(resp)}`);
-      return new Uint8Array(resp.Presign.presign_id);
+      if (!resp.Attestation) throw new Error(`Presign failed: ${JSON.stringify(resp)}`);
+      const payload = VersionedPresignDataAttestation.parse(
+        new Uint8Array(resp.Attestation.attestation_data),
+      );
+      if (!payload.V1) {
+        throw new Error(`unexpected presign payload variant: ${JSON.stringify(payload)}`);
+      }
+      return new Uint8Array(payload.V1.presign_id);
     },
 
     async requestSign(senderPubkey, dwalletAddr, message, presignId, txSignature) {
@@ -95,8 +113,9 @@ export function createIkaWebClient(baseUrl: string): IkaDWalletWebClient {
         epoch: 1n, chain_id: { Solana: true },
         intended_chain_sender: Array.from(senderPubkey),
         request: { Sign: {
-          message: Array.from(message), curve: { Curve25519: true },
-          signature_algorithm: { EdDSA: true }, hash_scheme: { Keccak256: true },
+          message: Array.from(message), message_metadata: [],
+          curve: { Curve25519: true },
+          signature_scheme: { EddsaSha512: true },
           presign_id: Array.from(presignId),
           message_centralized_signature: Array.from(new Uint8Array(64)),
           approval_proof: { Solana: { transaction_signature: Array.from(txSignature), slot: 0n } },

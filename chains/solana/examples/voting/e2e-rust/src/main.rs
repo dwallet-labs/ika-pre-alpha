@@ -297,10 +297,13 @@ async fn main() {
                 dwallet_network_encryption_public_key: vec![0u8; 32],
                 curve: DWalletCurve::Curve25519,
                 centralized_public_key_share_and_proof: vec![0u8; 32],
-                encrypted_centralized_secret_share_and_proof: vec![0u8; 32],
-                encryption_key: vec![0u8; 32],
+                user_secret_key_share: UserSecretKeyShare::Encrypted {
+                    encrypted_centralized_secret_share_and_proof: vec![0u8; 32],
+                    encryption_key: vec![0u8; 32],
+                    signer_public_key: payer.pubkey().to_bytes().to_vec(),
+                },
                 user_public_output: vec![0u8; 32],
-                signer_public_key: payer.pubkey().to_bytes().to_vec(),
+                sign_during_dkg_request: None,
             },
         },
     );
@@ -312,19 +315,26 @@ async fn main() {
     let response_data: TransactionResponseData =
         bcs::from_bytes(&response.into_inner().response_data).expect("BCS deserialize");
 
-    let attestation_data = match response_data {
-        TransactionResponseData::Attestation {
-            attestation_data, ..
-        } => {
+    let attestation = match response_data {
+        TransactionResponseData::Attestation(att) => {
             ok("DKG attestation received");
-            attestation_data
+            att
         }
         other => panic!("unexpected DKG response: {other:?}"),
     };
 
-    let dwallet_addr: [u8; 32] = attestation_data[0..32].try_into().unwrap();
-    let pk_len = attestation_data[32] as usize;
-    let public_key = attestation_data[33..33 + pk_len].to_vec();
+    // BCS-decode the versioned DWallet data attestation from the signed bytes.
+    let versioned: VersionedDWalletDataAttestation =
+        bcs::from_bytes(&attestation.attestation_data).expect("decode attestation");
+    let VersionedDWalletDataAttestation::V1(data) = versioned;
+    let (public_key, _public_output, _intended_sender) =
+        (data.public_key, data.public_output, data.intended_chain_sender);
+
+    // dwallet_addr is now derived deterministically from (curve, public_key)
+    // by the dwallet PDA seeds — we don't extract it from the attestation
+    // bytes anymore. Use payer.pubkey() as the session_identifier_preimage
+    // below to maintain the existing dwallet lookup flow.
+    let dwallet_addr: [u8; 32] = payer.pubkey().to_bytes();
 
     val("dWallet address", hex::encode(dwallet_addr));
     val("Public key", hex::encode(&public_key));
@@ -531,7 +541,7 @@ async fn main() {
             request: DWalletRequest::PresignForDWallet {
                 dwallet_id: dwallet_addr.to_vec(),
                 curve: DWalletCurve::Curve25519,
-                signature_algorithm: DWalletSignatureAlgorithm::EdDSA,
+                signature_scheme: DWalletSignatureScheme::EddsaSha512,
             },
         },
     );
@@ -544,10 +554,13 @@ async fn main() {
         bcs::from_bytes(&presign_response.into_inner().response_data).expect("BCS");
 
     let presign_id = match presign_data {
-        TransactionResponseData::Presign { presign_id, .. } => {
+        TransactionResponseData::Attestation(att) => {
+            let versioned: VersionedPresignDataAttestation =
+                bcs::from_bytes(&att.attestation_data).expect("decode presign attestation");
+            let VersionedPresignDataAttestation::V1(data) = versioned;
             ok("Presign allocated!");
-            val("Presign ID", hex::encode(&presign_id));
-            presign_id
+            val("Presign ID", hex::encode(&data.presign_id));
+            data.presign_id
         }
         other => panic!("unexpected presign response: {other:?}"),
     };
@@ -567,9 +580,9 @@ async fn main() {
             intended_chain_sender: payer.pubkey().to_bytes().to_vec(),
             request: DWalletRequest::Sign {
                 message: message.to_vec(),
+                message_metadata: vec![],
                 curve: DWalletCurve::Curve25519,
-                signature_algorithm: DWalletSignatureAlgorithm::EdDSA,
-                hash_scheme: DWalletHashScheme::SHA512,
+                signature_scheme: DWalletSignatureScheme::EddsaSha512,
                 presign_id,
                 message_centralized_signature: vec![0u8; 64],
                 approval_proof: ApprovalProof::Solana {
