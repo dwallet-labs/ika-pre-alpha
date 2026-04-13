@@ -615,9 +615,10 @@ async fn main() {
             chain_id: ChainId::Solana,
             intended_chain_sender: payer.pubkey().to_bytes().to_vec(),
             request: DWalletRequest::PresignForDWallet {
-                dwallet_id: dwallet_addr.to_vec(),
+                dwallet_network_encryption_public_key: vec![0u8; 32],
+                dwallet_public_key: dwallet_addr.to_vec(),
                 curve: DWalletCurve::Curve25519,
-                signature_scheme: DWalletSignatureScheme::EddsaSha512,
+                signature_algorithm: DWalletSignatureAlgorithm::EdDSA,
             },
         };
         let signed_data = bcs::to_bytes(&request).expect("BCS serialize");
@@ -646,8 +647,8 @@ async fn main() {
                 bcs::from_bytes(&att.attestation_data).expect("decode presign attestation");
             let VersionedPresignDataAttestation::V1(data) = versioned;
             ok("Presign allocated!");
-            val("Presign ID", hex::encode(&data.presign_id));
-            data.presign_id
+            val("Presign ID", hex::encode(&data.presign_session_identifier));
+            data.presign_session_identifier
         }
         TransactionResponseData::Error { message } => {
             panic!("gRPC Presign failed: {message}");
@@ -677,10 +678,14 @@ async fn main() {
             request: DWalletRequest::Sign {
                 message: message.to_vec(),
                 message_metadata: vec![],
-                curve: DWalletCurve::Curve25519,
-                signature_scheme: DWalletSignatureScheme::EddsaSha512,
-                presign_id,
+                presign_session_identifier: presign_id,
                 message_centralized_signature: vec![0u8; 64],
+                dwallet_attestation: NetworkSignedAttestation {
+                    attestation_data: vec![0u8; 32],
+                    network_signature: vec![0u8; 64],
+                    network_pubkey: vec![0u8; 32],
+                    epoch: 1,
+                },
                 approval_proof: ApprovalProof::Solana {
                     transaction_signature: quorum_tx_sig.as_ref().to_vec(),
                     slot: quorum_slot,
