@@ -6,14 +6,17 @@ members = [
     "chains/solana/program-sdk/pinocchio",
     "chains/solana/program-sdk/anchor",
     "chains/solana/program-sdk/native",
+    "chains/solana/program-sdk/quasar",
     "chains/solana/sdk/types",
     "chains/solana/clients/rust",
     "chains/solana/examples/voting/pinocchio",
     "chains/solana/examples/voting/native",
     "chains/solana/examples/voting/anchor",
+    "chains/solana/examples/voting/quasar",
     "chains/solana/examples/multisig/pinocchio",
     "chains/solana/examples/multisig/anchor",
     "chains/solana/examples/multisig/native",
+    "chains/solana/examples/multisig/quasar",
 ]
 
 [workspace.package]
@@ -28,12 +31,17 @@ edition = "2024"
 ika-dwallet-pinocchio = { path = "chains/solana/program-sdk/pinocchio" }
 ika-dwallet-anchor = { path = "chains/solana/program-sdk/anchor" }
 ika-dwallet-native = { path = "chains/solana/program-sdk/native" }
+ika-dwallet-quasar = { path = "chains/solana/program-sdk/quasar" }
 ika-system-types = { path = "chains/solana/sdk/types" }
 ika-dwallet-types = { path = "crates/ika-dwallet-types" }
 
 # Pinocchio
 pinocchio = { version = "^0.10", features = ["cpi", "copy"] }
 pinocchio-system = "^0.5"
+
+# Quasar
+quasar-lang = { git = "https://github.com/blueshift-gg/quasar", branch = "master" }
+solana-instruction-view = "2"
 
 # Anchor
 anchor-lang = "1"

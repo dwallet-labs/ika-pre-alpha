@@ -1,0 +1,18 @@
+[package]
+name = "ika-example-multisig-quasar"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish.workspace = true
+edition.workspace = true
+
+[dependencies]
+quasar-lang = { workspace = true }
+solana-address = { workspace = true }
+ika-dwallet-quasar = { workspace = true }
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
