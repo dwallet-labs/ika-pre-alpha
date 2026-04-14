@@ -293,19 +293,19 @@ function grpcSubmitTransaction(
  * Build the dWallet PDA seed list for `find_program_address`.
  *
  * Mirrors `ika_dwallet_program::state::dwallet::DWalletPdaSeeds::new`:
- * concatenate `curve_byte || public_key` into a single buffer and split
+ * concatenate `curve_u16_le || public_key` into a single buffer and split
  * it into 32-byte chunks (Solana's `MAX_SEED_LEN`). Each chunk becomes
  * its own seed. The total seed count varies by pubkey length but stays
  * well under `MAX_SEEDS = 16`.
  *
- *   - 32-byte pubkey (Ed25519/Curve25519/Ristretto): payload 33 → [32, 1]
- *   - 33-byte pubkey (compressed Secp256k1/r1):      payload 34 → [32, 2]
- *   - 65-byte pubkey (uncompressed SEC1):            payload 66 → [32, 32, 2]
+ *   - 32-byte pubkey (Ed25519/Curve25519/Ristretto): payload 34 → [32, 2]
+ *   - 33-byte pubkey (compressed Secp256k1/r1):      payload 35 → [32, 3]
+ *   - 65-byte pubkey (uncompressed SEC1):            payload 67 → [32, 32, 3]
  */
 function dwalletPdaSeeds(curve: number, publicKey: Uint8Array): Buffer[] {
-  const payload = Buffer.alloc(1 + publicKey.length);
-  payload[0] = curve;
-  Buffer.from(publicKey).copy(payload, 1);
+  const payload = Buffer.alloc(2 + publicKey.length);
+  payload.writeUInt16LE(curve, 0);
+  Buffer.from(publicKey).copy(payload, 2);
 
   const seeds: Buffer[] = [SEED_DWALLET];
   for (let i = 0; i < payload.length; i += 32) {
@@ -519,7 +519,7 @@ export async function requestPresign(
       `unexpected presign payload variant: ${JSON.stringify(presignPayload)}`,
     );
   }
-  return new Uint8Array(presignPayload.V1.presign_id);
+  return new Uint8Array(presignPayload.V1.presign_session_identifier);
 }
 
 /**
@@ -582,13 +582,20 @@ export async function requestSign(
 
 export function findMessageApprovalPda(
   dwalletProgramId: PublicKey,
-  dwallet: PublicKey,
+  curve: number,
+  publicKey: Uint8Array,
+  signatureScheme: number,
   messageHash: Uint8Array,
 ): [PublicKey, number] {
-  return pda(
-    [SEED_MESSAGE_APPROVAL, dwallet.toBuffer(), Buffer.from(messageHash)],
-    dwalletProgramId,
-  );
+  const schemeBuf = Buffer.alloc(2);
+  schemeBuf.writeUInt16LE(signatureScheme, 0);
+  const seeds = [
+    ...dwalletPdaSeeds(curve, publicKey),
+    SEED_MESSAGE_APPROVAL,
+    schemeBuf,
+    Buffer.from(messageHash),
+  ];
+  return pda(seeds, dwalletProgramId);
 }
 
 // ── Internal helpers ──

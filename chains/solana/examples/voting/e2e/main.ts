@@ -66,7 +66,7 @@ const [proposalPda, proposalBump] = pda(
 );
 
 const [messageApprovalPda, messageApprovalBump] = findMessageApprovalPda(
-  dwalletProgramId, dwallet.dwalletPda, messageHash,
+  dwalletProgramId, 2, dwallet.publicKey, 5, messageHash,
 );
 
 await sendTx(connection, payer, [

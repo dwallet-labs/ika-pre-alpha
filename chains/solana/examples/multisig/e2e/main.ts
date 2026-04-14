@@ -87,7 +87,7 @@ const userPubkey = new Uint8Array(32).fill(0xcc);
 const txIndex = 0;
 
 const [messageApprovalPda, messageApprovalBump] = findMessageApprovalPda(
-  dwalletProgramId, dwallet.dwalletPda, messageHash,
+  dwalletProgramId, 2, dwallet.publicKey, 5, messageHash,
 );
 
 const txIndexBuf = Buffer.alloc(4);
@@ -208,7 +208,7 @@ const [txPda2, txBump2] = pda(
   [Buffer.from("transaction"), multisigPda.toBuffer(), txIndexBuf2],
   multisigProgramId,
 );
-const [, maBump2] = findMessageApprovalPda(dwalletProgramId, dwallet.dwalletPda, messageHash2);
+const [, maBump2] = findMessageApprovalPda(dwalletProgramId, 2, dwallet.publicKey, 5, messageHash2);
 
 await sendTx(connection, payer, [
   buildCreateTransactionIx(

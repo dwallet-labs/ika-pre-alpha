@@ -75,9 +75,9 @@ const DISC_MESSAGE_APPROVAL: u8 = 14;
 const COORDINATOR_LEN: usize = 116;
 const NEK_LEN: usize = 164;
 
-const MA_STATUS: usize = 139;
-const MA_SIGNATURE_LEN: usize = 140;
-const MA_SIGNATURE: usize = 142;
+const MA_STATUS: usize = 172;
+const MA_SIGNATURE_LEN: usize = 173;
+const MA_SIGNATURE: usize = 175;
 const MA_STATUS_SIGNED: u8 = 1;
 
 const SEED_DWALLET_COORDINATOR: &[u8] = b"dwallet_coordinator";
@@ -89,10 +89,10 @@ const SEED_CPI_AUTHORITY: &[u8] = b"__ika_cpi_authority";
 const CURVE_CURVE25519: u16 = 2;
 
 // Multisig program constants
-const TX_APPROVAL_COUNT: usize = 135;
-const TX_STATUS: usize = 139;
-const TX_MESSAGE_DATA_LEN: usize = 174;
-const TX_MESSAGE_DATA: usize = 176;
+const TX_APPROVAL_COUNT: usize = 136;
+const TX_STATUS: usize = 140;
+const TX_MESSAGE_DATA_LEN: usize = 175;
+const TX_MESSAGE_DATA: usize = 177;
 
 // ======================================================================
 // Helpers
@@ -172,7 +172,7 @@ fn simple_keccak256(data: &[u8]) -> [u8; 32] {
 /// Build a dummy BCS-serialized gRPC request for DKG.
 fn build_dkg_grpc_request(user_keypair: &Keypair, curve: DWalletCurve) -> UserSignedRequest {
     let request = SignedRequestData {
-        session_identifier_preimage: [0u8; 32],
+        session_identifier_preimage: user_keypair.pubkey().to_bytes(),
         epoch: 1,
         chain_id: ChainId::Solana,
         intended_chain_sender: user_keypair.pubkey().to_bytes().to_vec(),
@@ -341,9 +341,10 @@ async fn main() {
     let VersionedDWalletDataAttestation::V1(data) = versioned;
     let public_key = data.public_key;
 
-    // dwallet_addr is now derived from (curve, public_key) by the dwallet
-    // PDA seeds — we don't pull it from the attestation bytes anymore.
-    let dwallet_addr: [u8; 32] = payer.pubkey().to_bytes();
+    // The mock stores the signing key under the session_identifier from the
+    // DKG request. Use it as the session_identifier_preimage for subsequent
+    // Presign/Sign requests so the mock can look up the key.
+    let dwallet_addr: [u8; 32] = data.session_identifier;
 
     val("dWallet address", hex::encode(dwallet_addr));
     val("Public key", hex::encode(&public_key));
@@ -456,10 +457,20 @@ async fn main() {
     let user_pubkey = [0xCCu8; 32];
     let tx_index: u32 = 0;
 
-    let (message_approval_pda, message_approval_bump) = Pubkey::find_program_address(
-        &[SEED_MESSAGE_APPROVAL, dwallet_pda.as_ref(), &message_hash],
-        &dwallet_program_id,
-    );
+    // MessageApproval PDA uses hierarchical seeds:
+    // ["dwallet", chunks(curve_u16_le || pk), "message_approval", &scheme_u16_le, &message_digest]
+    let scheme_u16: u16 = 5; // EddsaSha512 — matches Curve25519 DKG
+    let scheme_bytes = scheme_u16.to_le_bytes();
+    let ma_payload = pack_dwallet_seed_payload(curve, &public_key);
+    let mut ma_seeds: Vec<&[u8]> = vec![b"dwallet"];
+    for chunk in ma_payload.chunks(32) {
+        ma_seeds.push(chunk);
+    }
+    ma_seeds.push(SEED_MESSAGE_APPROVAL);
+    ma_seeds.push(&scheme_bytes);
+    ma_seeds.push(&message_hash);
+    let (message_approval_pda, message_approval_bump) =
+        Pubkey::find_program_address(&ma_seeds, &dwallet_program_id);
 
     let (tx_pda, tx_bump) = Pubkey::find_program_address(
         &[
@@ -473,7 +484,7 @@ async fn main() {
     let mut create_tx = vec![1u8];
     create_tx.extend_from_slice(&message_hash);
     create_tx.extend_from_slice(&user_pubkey);
-    create_tx.push(0); // signature_scheme
+    create_tx.extend_from_slice(&scheme_u16.to_le_bytes()); // signature_scheme (u16)
     create_tx.push(message_approval_bump);
     create_tx.extend_from_slice(&[0u8; 32]); // no partial_user_sig
     create_tx.push(tx_bump);
@@ -570,6 +581,7 @@ async fn main() {
                 AccountMeta::new(payer.pubkey(), true),
                 AccountMeta::new_readonly(system_program::id(), false),
                 // CPI accounts for approve_message:
+                AccountMeta::new_readonly(coordinator_pda, false),
                 AccountMeta::new(message_approval_pda, false),
                 AccountMeta::new_readonly(dwallet_pda, false),
                 AccountMeta::new_readonly(multisig_program_id, false),
@@ -614,9 +626,8 @@ async fn main() {
             epoch: 1,
             chain_id: ChainId::Solana,
             intended_chain_sender: payer.pubkey().to_bytes().to_vec(),
-            request: DWalletRequest::PresignForDWallet {
+            request: DWalletRequest::Presign {
                 dwallet_network_encryption_public_key: vec![0u8; 32],
-                dwallet_public_key: dwallet_addr.to_vec(),
                 curve: DWalletCurve::Curve25519,
                 signature_algorithm: DWalletSignatureAlgorithm::EdDSA,
             },
@@ -680,12 +691,7 @@ async fn main() {
                 message_metadata: vec![],
                 presign_session_identifier: presign_id,
                 message_centralized_signature: vec![0u8; 64],
-                dwallet_attestation: NetworkSignedAttestation {
-                    attestation_data: vec![0u8; 32],
-                    network_signature: vec![0u8; 64],
-                    network_pubkey: vec![0u8; 32],
-                    epoch: 1,
-                },
+                dwallet_attestation: attestation.clone(),
                 approval_proof: ApprovalProof::Solana {
                     transaction_signature: quorum_tx_sig.as_ref().to_vec(),
                     slot: quorum_slot,
@@ -780,7 +786,7 @@ async fn main() {
     let mut create_tx2 = vec![1u8];
     create_tx2.extend_from_slice(&message_hash2);
     create_tx2.extend_from_slice(&user_pubkey);
-    create_tx2.push(0);
+    create_tx2.extend_from_slice(&scheme_u16.to_le_bytes()); // signature_scheme (u16)
     create_tx2.push(ma_bump2);
     create_tx2.extend_from_slice(&[0u8; 32]);
     create_tx2.push(tx_bump2);

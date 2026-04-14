@@ -104,7 +104,7 @@ export function createIkaWebClient(baseUrl: string): IkaDWalletWebClient {
       if (!payload.V1) {
         throw new Error(`unexpected presign payload variant: ${JSON.stringify(payload)}`);
       }
-      return new Uint8Array(payload.V1.presign_id);
+      return new Uint8Array(payload.V1.presign_session_identifier);
     },
 
     async requestSign(senderPubkey, dwalletAddr, message, presignId, txSignature) {
@@ -114,10 +114,14 @@ export function createIkaWebClient(baseUrl: string): IkaDWalletWebClient {
         intended_chain_sender: Array.from(senderPubkey),
         request: { Sign: {
           message: Array.from(message), message_metadata: [],
-          curve: { Curve25519: true },
-          signature_scheme: { EddsaSha512: true },
-          presign_id: Array.from(presignId),
+          presign_session_identifier: Array.from(presignId),
           message_centralized_signature: Array.from(new Uint8Array(64)),
+          dwallet_attestation: {
+            attestation_data: Array.from(new Uint8Array(32)),
+            network_signature: Array.from(new Uint8Array(64)),
+            network_pubkey: Array.from(new Uint8Array(32)),
+            epoch: 1n,
+          },
           approval_proof: { Solana: { transaction_signature: Array.from(txSignature), slot: 0n } },
         }},
       }).toBytes();

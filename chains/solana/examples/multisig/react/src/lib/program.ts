@@ -23,8 +23,20 @@ export function findApprovalRecordPda(tx: PublicKey, member: PublicKey): [Public
 export function findCpiAuthority(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync([Buffer.from('__ika_cpi_authority')], MULTISIG_PROGRAM_ID);
 }
-export function findMessageApprovalPda(dwallet: PublicKey, messageHash: Uint8Array): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync([Buffer.from('message_approval'), dwallet.toBuffer(), Buffer.from(messageHash)], DWALLET_PROGRAM_ID);
+export function findMessageApprovalPda(curve: number, publicKey: Uint8Array, signatureScheme: number, messageHash: Uint8Array): [PublicKey, number] {
+  const payload = Buffer.alloc(2 + publicKey.length);
+  payload.writeUInt16LE(curve, 0);
+  Buffer.from(publicKey).copy(payload, 2);
+  const seeds: Buffer[] = [Buffer.from('dwallet')];
+  for (let i = 0; i < payload.length; i += 32) {
+    seeds.push(payload.subarray(i, Math.min(i + 32, payload.length)));
+  }
+  seeds.push(Buffer.from('message_approval'));
+  const schemeBuf = Buffer.alloc(2);
+  schemeBuf.writeUInt16LE(signatureScheme, 0);
+  seeds.push(schemeBuf);
+  seeds.push(Buffer.from(messageHash));
+  return PublicKey.findProgramAddressSync(seeds, DWALLET_PROGRAM_ID);
 }
 
 export interface MultisigAccount {

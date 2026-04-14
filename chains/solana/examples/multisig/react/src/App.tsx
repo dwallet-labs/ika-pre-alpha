@@ -53,6 +53,7 @@ function AppContent() {
   // dWallet state
   const [dwalletPda, setDwalletPda] = useState<PublicKey | null>(null);
   const [dwalletAddr, setDwalletAddr] = useState<Uint8Array | null>(null);
+  const [dwalletPublicKey, setDwalletPublicKey] = useState<Uint8Array | null>(null);
 
   // Multisig state
   const [multisigPda, setMultisigPda] = useState<PublicKey | null>(null);
@@ -109,8 +110,16 @@ function AppContent() {
       // 1. DKG via gRPC (mock commits on-chain + transfers authority to wallet)
       const dkg = await ikaClient.requestDKG(publicKey.toBytes());
       const curve = 2; // Curve25519
+      // PDA seeds = ["dwallet", chunks_of(curve_u16_le || pubkey)]
+      const payload = Buffer.alloc(2 + dkg.publicKey.length);
+      payload.writeUInt16LE(curve, 0);
+      Buffer.from(dkg.publicKey).copy(payload, 2);
+      const chunks: Buffer[] = [];
+      for (let i = 0; i < payload.length; i += 32) {
+        chunks.push(payload.subarray(i, Math.min(i + 32, payload.length)));
+      }
       const [dwPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('dwallet'), Buffer.from([curve]), Buffer.from(dkg.publicKey)],
+        [Buffer.from('dwallet'), ...chunks],
         DWALLET_PROGRAM_ID,
       );
 
@@ -150,6 +159,7 @@ function AppContent() {
 
       setDwalletPda(dwPda);
       setDwalletAddr(dkg.dwalletAddr);
+      setDwalletPublicKey(dkg.publicKey);
       await loadMultisig(msPda);
       setStatus('Multisig created!');
     } catch (e: any) {
@@ -158,12 +168,12 @@ function AppContent() {
   }, [publicKey, ikaClient, createMembers, createThreshold, sendTx, connection, loadMultisig]);
 
   const handlePropose = useCallback(async () => {
-    if (!publicKey || !multisigPda || !multisigData || !dwalletPda) return;
+    if (!publicKey || !multisigPda || !multisigData || !dwalletPda || !dwalletPublicKey) return;
     setLoading(true); setStatus('Proposing...');
     try {
       const msgBytes = new TextEncoder().encode(proposeMsg);
       const hash = keccak256(msgBytes);
-      const [maPda, maBump] = findMessageApprovalPda(dwalletPda, hash);
+      const [maPda, maBump] = findMessageApprovalPda(2, dwalletPublicKey, 5, hash);
       const [txPda, txBump] = findTransactionPda(multisigPda, multisigData.txIndex);
       await sendTx(new Transaction().add(
         buildCreateTransactionIx(multisigPda, txPda, publicKey, publicKey, hash, publicKey.toBytes(), 0, maBump, txBump, msgBytes),
@@ -173,16 +183,16 @@ function AppContent() {
       setStatus('Transaction proposed');
     } catch (e: any) { setStatus(`Error: ${e.message}`); }
     finally { setLoading(false); }
-  }, [publicKey, multisigPda, multisigData, dwalletPda, proposeMsg, sendTx, loadMultisig]);
+  }, [publicKey, multisigPda, multisigData, dwalletPda, dwalletPublicKey, proposeMsg, sendTx, loadMultisig]);
 
   const handleApprove = useCallback(async (txPda: PublicKey, tx: TransactionAccount) => {
-    if (!publicKey || !multisigPda || !multisigData || !dwalletPda) return;
+    if (!publicKey || !multisigPda || !multisigData || !dwalletPda || !dwalletPublicKey) return;
     setLoading(true); setStatus('Approving...');
     try {
       const [arPda, arBump] = findApprovalRecordPda(txPda, publicKey);
       const [cpiAuth, cpiBump] = findCpiAuthority();
       const willQuorum = tx.approvalCount + 1 >= multisigData.threshold;
-      const [maPda] = findMessageApprovalPda(dwalletPda, tx.messageHash);
+      const [maPda] = findMessageApprovalPda(2, dwalletPublicKey, 5, tx.messageHash);
       const sig = await sendTx(new Transaction().add(
         buildApproveIx(multisigPda, txPda, arPda, publicKey, publicKey, tx.txIndex, arBump, cpiBump,
           willQuorum ? { messageApproval: maPda, dwallet: dwalletPda, cpiAuthority: cpiAuth } : undefined),
@@ -207,7 +217,7 @@ function AppContent() {
       await loadMultisig(multisigPda);
     } catch (e: any) { setStatus(`Error: ${e.message}`); }
     finally { setLoading(false); }
-  }, [publicKey, multisigPda, multisigData, dwalletPda, dwalletAddr, ikaClient, sendTx, loadMultisig]);
+  }, [publicKey, multisigPda, multisigData, dwalletPda, dwalletPublicKey, dwalletAddr, ikaClient, sendTx, loadMultisig]);
 
   const handleReject = useCallback(async (txPda: PublicKey, tx: TransactionAccount) => {
     if (!publicKey || !multisigPda) return;
