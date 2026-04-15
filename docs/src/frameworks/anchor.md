@@ -256,4 +256,4 @@ If migrating from Anchor 0.30/0.31:
 | **Space** | `core::mem::size_of::<T>()` | `8 + T::INIT_SPACE` (`InitSpace` derive) |
 | **Best for** | Maximum CU efficiency | Rapid development, safety |
 
-Both SDKs use the same CPI authority seed (`b"__ika_cpi_authority"`), the same instruction discriminators, and the same account layouts. Programs built with either SDK are fully interoperable.
+All four SDKs (Pinocchio, Native, Anchor, [Quasar](./quasar.md)) use the same CPI authority seed (`b"__ika_cpi_authority"`), the same instruction discriminators, and the same account layouts. Programs built with any SDK are fully interoperable.

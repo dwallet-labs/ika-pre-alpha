@@ -15,9 +15,13 @@ cargo test --workspace
 ## Structure
 
 - `chains/solana/program-sdk/pinocchio/` -- CPI SDK for Pinocchio programs
+- `chains/solana/program-sdk/anchor/` -- CPI SDK for Anchor programs
+- `chains/solana/program-sdk/native/` -- CPI SDK for native solana-program programs
+- `chains/solana/program-sdk/quasar/` -- CPI SDK for Quasar programs
 - `chains/solana/sdk/types/` -- Account readers and PDA helpers
 - `chains/solana/clients/` -- Generated Rust/TypeScript clients
-- `chains/solana/examples/voting/` -- Example voting-controlled dWallet
+- `chains/solana/examples/voting/` -- Example voting-controlled dWallet (pinocchio, native, anchor, quasar)
+- `chains/solana/examples/multisig/` -- Example multisig-controlled dWallet (pinocchio, native, anchor, quasar)
 - `crates/ika-grpc/` -- gRPC client types (generated from proto)
 - `crates/ika-dwallet-types/` -- BCS request/response types
 - `proto/` -- Protobuf definitions

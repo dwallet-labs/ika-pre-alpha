@@ -115,13 +115,13 @@ When quorum is reached, the program constructs a `DWalletContext` and calls `app
 
 ## When to Use Native
 
-| Consideration | Pinocchio | Native | Anchor |
-|---|---|---|---|
-| **CU efficiency** | Best | Good | Good |
-| **std library** | No (`no_std`) | Yes | Yes |
-| **Framework dependency** | pinocchio | solana-program | anchor-lang |
-| **Account validation** | Manual | Manual | Declarative |
-| **Migration from existing** | Rewrite | Minimal | Rewrite |
+| Consideration | Pinocchio | Native | Anchor | Quasar |
+|---|---|---|---|---|
+| **CU efficiency** | Best | Good | Good | Best |
+| **std library** | No (`no_std`) | Yes | Yes | No (`no_std`) |
+| **Framework dependency** | pinocchio | solana-program | anchor-lang | quasar-lang |
+| **Account validation** | Manual | Manual | Declarative | Declarative |
+| **Migration from existing** | Rewrite | Minimal | Rewrite | Rewrite |
 
 Choose Native when you have an existing `solana-program` codebase, want `std` library access, or prefer no framework lock-in beyond Solana's standard SDK.
 
@@ -137,4 +137,4 @@ Choose Native when you have an existing `solana-program` codebase, want `std` li
 | **std** | `#![no_std]` | Full std |
 | **Account iteration** | Array indexing | `next_account_info()` |
 
-Both SDKs use the same CPI authority seed, instruction discriminators, and account layouts. Programs built with either are fully interoperable.
+All four SDKs (Pinocchio, Native, Anchor, [Quasar](./quasar.md)) use the same CPI authority seed, instruction discriminators, and account layouts. Programs built with any SDK are fully interoperable.

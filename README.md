@@ -11,10 +11,12 @@ Public developer SDK for building Solana programs that integrate with [Ika dWall
 | `bin/` | Pre-built dWallet program binary (`.so`) for testing and local deployment |
 | `chains/solana/program-sdk/pinocchio/` | CPI SDK for Pinocchio programs (`ika-dwallet-pinocchio`) |
 | `chains/solana/program-sdk/anchor/` | CPI SDK for Anchor v1.0.0 programs (`ika-dwallet-anchor`) |
+| `chains/solana/program-sdk/native/` | CPI SDK for native solana-program programs (`ika-dwallet-native`) |
+| `chains/solana/program-sdk/quasar/` | CPI SDK for Quasar programs (`ika-dwallet-quasar`) |
 | `chains/solana/sdk/types/` | Account data readers and PDA derivation helpers (`ika-system-types`) |
 | `chains/solana/clients/` | Generated Rust and TypeScript clients |
-| `chains/solana/examples/voting/` | Example: voting-controlled dWallet (Pinocchio) |
-| `chains/solana/examples/voting-anchor/` | Example: voting-controlled dWallet (Anchor v1) |
+| `chains/solana/examples/voting/` | Example: voting-controlled dWallet (Pinocchio, Native, Anchor, Quasar) |
+| `chains/solana/examples/multisig/` | Example: multisig-controlled dWallet (Pinocchio, Native, Anchor, Quasar) |
 | `crates/ika-grpc/` | gRPC client types for the dWallet signing service |
 | `crates/ika-dwallet-types/` | BCS-serializable request/response types |
 | `proto/` | Protobuf definitions |
@@ -62,10 +64,18 @@ ika-dwallet-anchor = { git = "https://github.com/dwallet-labs/ika-pre-alpha" }
 anchor-lang = "1"
 ```
 
+### Quasar
+
+```toml
+[dependencies]
+ika-dwallet-quasar = { git = "https://github.com/dwallet-labs/ika-pre-alpha" }
+quasar-lang = { git = "https://github.com/blueshift-gg/quasar", branch = "master" }
+```
+
 ### Usage
 
 ```rust
-use ika_dwallet_pinocchio::DWalletContext; // or ika_dwallet_anchor::DWalletContext
+use ika_dwallet_pinocchio::DWalletContext; // or ika_dwallet_anchor / ika_dwallet_quasar
 
 let ctx = DWalletContext {
     dwallet_program, cpi_authority, caller_program, cpi_authority_bump: bump,

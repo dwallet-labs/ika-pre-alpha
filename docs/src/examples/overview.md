@@ -25,6 +25,8 @@ examples/<name>/
 │   └── tests/mollusk.rs
 ├── anchor/             # Anchor framework implementation
 │   └── src/lib.rs
+├── quasar/             # Quasar framework implementation
+│   └── src/lib.rs
 ├── e2e/                # TypeScript end-to-end tests (bun)
 │   ├── main.ts
 │   └── instructions.ts

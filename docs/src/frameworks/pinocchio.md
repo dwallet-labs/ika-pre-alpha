@@ -116,12 +116,13 @@ When quorum is reached in `cast_vote`, the program constructs a `DWalletContext`
 
 ## When to Use Pinocchio
 
-| Consideration | Pinocchio | Native | Anchor |
-|---|---|---|---|
-| **CU efficiency** | Best | Good | Good |
-| **Binary size** | Smallest | Medium | Largest |
-| **`no_std` support** | Yes | No | No |
-| **Account validation** | Manual | Manual | Declarative |
-| **Learning curve** | Steepest | Medium | Easiest |
+| Consideration | Pinocchio | Native | Anchor | Quasar |
+|---|---|---|---|---|
+| **CU efficiency** | Best | Good | Good | Best |
+| **Binary size** | Smallest | Medium | Largest | Small |
+| **`no_std` support** | Yes | No | No | Yes |
+| **Account validation** | Manual | Manual | Declarative | Declarative |
+| **Zero-copy** | Manual | No | No | Built-in |
+| **Learning curve** | Steepest | Medium | Easiest | Medium |
 
-Choose Pinocchio when you need maximum CU efficiency, smallest binary size, or `no_std` compatibility.
+Choose Pinocchio when you need maximum CU efficiency, smallest binary size, or `no_std` compatibility. Consider [Quasar](./quasar.md) if you want similar performance with declarative account validation.

@@ -6,17 +6,40 @@ Build your first dWallet-controlled program in 5 minutes.
 
 ## 1. Create a Solana Program
 
-```toml
-[package]
-name = "my-dwallet-program"
-version = "0.1.0"
-edition = "2024"
+Pick your framework. All four produce interoperable programs:
 
+**Pinocchio** (maximum CU efficiency, `no_std`):
+```toml
 [dependencies]
 ika-dwallet-pinocchio = { git = "https://github.com/dwallet-labs/ika-pre-alpha" }
 pinocchio = "0.10"
 pinocchio-system = "0.5"
+```
 
+**Quasar** (zero-copy + declarative validation, `no_std`):
+```toml
+[dependencies]
+ika-dwallet-quasar = { git = "https://github.com/dwallet-labs/ika-pre-alpha" }
+quasar-lang = { git = "https://github.com/blueshift-gg/quasar", branch = "master" }
+solana-address = { version = "2.4", features = ["curve25519"] }
+```
+
+**Anchor v1** (easiest, declarative):
+```toml
+[dependencies]
+ika-dwallet-anchor = { git = "https://github.com/dwallet-labs/ika-pre-alpha" }
+anchor-lang = "1"
+```
+
+**Native** (standard `solana-program`, no framework):
+```toml
+[dependencies]
+ika-dwallet-native = { git = "https://github.com/dwallet-labs/ika-pre-alpha" }
+solana-program = "2.2"
+```
+
+All require:
+```toml
 [lib]
 crate-type = ["cdylib", "lib"]
 ```

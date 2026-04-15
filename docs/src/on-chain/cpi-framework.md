@@ -4,10 +4,19 @@
 
 ## DWalletContext
 
-The `ika-dwallet-pinocchio` crate provides `DWalletContext` for calling dWallet instructions via CPI from Pinocchio programs.
+The CPI SDK is available for four Solana frameworks:
+
+| Crate | Framework | Account type |
+|-------|-----------|-------------|
+| `ika-dwallet-pinocchio` | Pinocchio | `&AccountView` |
+| `ika-dwallet-native` | solana-program | `&AccountInfo<'info>` |
+| `ika-dwallet-anchor` | Anchor v1 | `AccountInfo<'info>` |
+| `ika-dwallet-quasar` | Quasar | `&AccountView` (via `.to_account_view()`) |
+
+All four provide an identical `DWalletContext` with the same methods and wire format.
 
 ```rust
-use ika_dwallet_pinocchio::DWalletContext;
+use ika_dwallet_pinocchio::DWalletContext; // or _anchor, _native, _quasar
 
 let ctx = DWalletContext {
     dwallet_program: &dwallet_program_account,

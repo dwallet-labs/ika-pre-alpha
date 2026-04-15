@@ -41,6 +41,7 @@
 - [Pinocchio](./frameworks/pinocchio.md)
 - [Native](./frameworks/native.md)
 - [Anchor](./frameworks/anchor.md)
+- [Quasar](./frameworks/quasar.md)
 - [TypeScript](./frameworks/typescript.md)
 
 # Examples
