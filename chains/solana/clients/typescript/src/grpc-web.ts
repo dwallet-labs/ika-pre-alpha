@@ -90,7 +90,14 @@ export function createIkaWebClient(baseUrl: string): IkaDWalletWebClient {
         intended_chain_sender: Array.from(senderPubkey),
         request: { PresignForDWallet: {
           dwallet_network_encryption_public_key: Array.from(new Uint8Array(32)),
-          dwallet_public_key: Array.from(dwalletAddr), curve: { Curve25519: true },
+          dwallet_public_key: Array.from(dwalletAddr),
+          dwallet_attestation: {
+            attestation_data: Array.from(new Uint8Array(32)),
+            network_signature: Array.from(new Uint8Array(64)),
+            network_pubkey: Array.from(new Uint8Array(32)),
+            epoch: 1n,
+          },
+          curve: { Curve25519: true },
           signature_algorithm: { EdDSA: true },
         }},
       }).toBytes();

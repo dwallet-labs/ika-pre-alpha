@@ -330,6 +330,12 @@ async fn main() {
     let presign_imported = submit(&mut client, build_request(&payer, imported_session, DWalletRequest::PresignForDWallet {
         dwallet_network_encryption_public_key: vec![0u8; 32],
         dwallet_public_key: imported_session.to_vec(),
+        dwallet_attestation: NetworkSignedAttestation {
+            attestation_data: vec![0u8; 32],
+            network_signature: vec![0u8; 64],
+            network_pubkey: vec![0u8; 32],
+            epoch: 1,
+        },
         curve: DWalletCurve::Secp256k1,
         signature_algorithm: DWalletSignatureAlgorithm::ECDSASecp256k1,
     })).await;
@@ -407,6 +413,12 @@ async fn main() {
     let future_msg = b"conditional transfer 50 ETH";
     let fs_resp = submit(&mut client, build_request(&payer, fs_session, DWalletRequest::FutureSign {
         dwallet_public_key: vec![0u8; 32],
+        dwallet_attestation: NetworkSignedAttestation {
+            attestation_data: vec![0u8; 32],
+            network_signature: vec![0u8; 64],
+            network_pubkey: vec![0u8; 32],
+            epoch: 1,
+        },
         presign_session_identifier: fs_presign,
         message: future_msg.to_vec(),
         message_metadata: vec![],

@@ -90,7 +90,7 @@ export function defineBcsTypes() {
     }),
     Presign: bcs.struct('Presign', { dwallet_network_encryption_public_key: bcs.vector(bcs.u8()), curve: DWalletCurve, signature_algorithm: DWalletSignatureAlgorithm }),
     PresignForDWallet: bcs.struct('PFD', {
-      dwallet_network_encryption_public_key: bcs.vector(bcs.u8()), dwallet_public_key: bcs.vector(bcs.u8()), curve: DWalletCurve, signature_algorithm: DWalletSignatureAlgorithm,
+      dwallet_network_encryption_public_key: bcs.vector(bcs.u8()), dwallet_public_key: bcs.vector(bcs.u8()), dwallet_attestation: NetworkSignedAttestation, curve: DWalletCurve, signature_algorithm: DWalletSignatureAlgorithm,
     }),
     ImportedKeyVerification: bcs.struct('IKV', {
       dwallet_network_encryption_public_key: bcs.vector(bcs.u8()),
@@ -113,6 +113,7 @@ export function defineBcsTypes() {
     }),
     FutureSign: bcs.struct('FutureSign', {
       dwallet_public_key: bcs.vector(bcs.u8()),
+      dwallet_attestation: NetworkSignedAttestation,
       presign_session_identifier: bcs.vector(bcs.u8()),
       message: bcs.vector(bcs.u8()),
       message_metadata: bcs.vector(bcs.u8()),

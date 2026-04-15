@@ -312,6 +312,7 @@ pub enum DWalletRequest {
     PresignForDWallet {
         dwallet_network_encryption_public_key: Vec<u8>,
         dwallet_public_key: Vec<u8>,
+        dwallet_attestation: NetworkSignedAttestation,
         curve: DWalletCurve,
         signature_algorithm: DWalletSignatureAlgorithm,
     },
@@ -341,6 +342,7 @@ pub enum DWalletRequest {
     /// user signature without an approval proof.
     FutureSign {
         dwallet_public_key: Vec<u8>,
+        dwallet_attestation: NetworkSignedAttestation,
         presign_session_identifier: Vec<u8>,
         message: Vec<u8>,
         /// BCS-serialized per-scheme metadata. Empty for most schemes.
