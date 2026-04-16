@@ -1,18 +1,19 @@
 [package]
 name = "ika-example-multisig-quasar"
-version.workspace = true
-authors.workspace = true
-license.workspace = true
-publish.workspace = true
-edition.workspace = true
+version = "0.1.0"
+authors = ["dWallet Labs"]
+license = "BSD-3-Clause-Clear"
+publish = false
+edition = "2021"
 
-[dependencies]
-quasar-lang = { workspace = true }
-solana-address = { workspace = true }
-ika-dwallet-quasar = { workspace = true }
-
-[lints]
-workspace = true
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ['cfg(target_os, values("solana"))']
 
 [lib]
 crate-type = ["cdylib", "lib"]
+
+[dependencies]
+quasar-lang = { git = "https://github.com/blueshift-gg/quasar" }
+solana-address = { version = "2.2.0", features = ["curve25519"] }
+ika-dwallet-quasar = { path = "../../../program-sdk/quasar" }

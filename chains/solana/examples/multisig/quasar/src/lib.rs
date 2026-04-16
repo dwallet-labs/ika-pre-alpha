@@ -11,7 +11,7 @@
 //!
 //! This is the Quasar equivalent of the Pinocchio `ika-example-multisig` program.
 
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 
 use ika_dwallet_quasar::DWalletContext;
 use quasar_lang::prelude::*;
@@ -33,19 +33,21 @@ mod multisig_quasar {
     #[instruction(discriminator = 0)]
     pub fn create_multisig(
         ctx: Ctx<CreateMultisig>,
+        create_key: Address,
         dwallet: [u8; 32],
         threshold: u16,
         member_count: u16,
         members_flat: [u8; 320],
     ) -> Result<(), ProgramError> {
         ctx.accounts
-            .create(dwallet, threshold, member_count, members_flat)
+            .create(create_key, dwallet, threshold, member_count, members_flat)
     }
 
     /// Propose a new transaction for the multisig to approve.
     #[instruction(discriminator = 1)]
     pub fn create_transaction(
         ctx: Ctx<CreateTransaction>,
+        tx_index: u32,
         message_hash: [u8; 32],
         user_pubkey: [u8; 32],
         signature_scheme: u16,
@@ -55,6 +57,7 @@ mod multisig_quasar {
         message_data: [u8; MAX_MESSAGE_DATA],
     ) -> Result<(), ProgramError> {
         ctx.accounts.create(
+            tx_index,
             message_hash,
             user_pubkey,
             signature_scheme,
@@ -81,8 +84,10 @@ mod multisig_quasar {
 
 fn is_member_quasar(ms: &MultisigAccount, key: &Address) -> bool {
     let count: u16 = ms.member_count.into();
+    let key_bytes = key.as_array();
     for i in 0..count as usize {
-        if ms.members[i] == *key {
+        let offset = i * 32;
+        if &ms.members[offset..offset + 32] == key_bytes.as_slice() {
             return true;
         }
     }
@@ -99,11 +104,11 @@ pub struct MultisigAccount {
     pub member_count: u16,
     pub tx_index: u32,
     pub dwallet: Address,
-    pub members: [Address; MAX_MEMBERS],
+    pub members: [u8; 320], // 10 * 32-byte addresses, flat
 }
 
 #[account(discriminator = 2, set_inner)]
-#[seeds(b"transaction", multisig: Address, tx_index_key: Address)]
+#[seeds(b"transaction", multisig: Address, tx_index: u32)]
 pub struct MultisigTransaction {
     pub multisig: Address,
     pub tx_index: u32,
@@ -144,10 +149,8 @@ pub enum MultisigError {
 // ── Accounts ──
 
 #[derive(Accounts)]
+#[instruction(create_key: Address)]
 pub struct CreateMultisig {
-    /// Create key -- its address is the 32-byte seed.
-    pub create_key: UncheckedAccount,
-
     #[account(init, payer = payer, seeds = MultisigAccount::seeds(create_key), bump)]
     pub multisig: Account<MultisigAccount>,
 
@@ -163,6 +166,7 @@ impl CreateMultisig {
     #[inline(always)]
     pub fn create(
         &mut self,
+        create_key: Address,
         dwallet: [u8; 32],
         threshold: u16,
         member_count: u16,
@@ -179,39 +183,28 @@ impl CreateMultisig {
             MultisigError::InvalidThreshold
         );
 
-        // Decode flat bytes into Address array.
-        let mut members = [Address::default(); MAX_MEMBERS];
-        for i in 0..member_count as usize {
-            let offset = i * 32;
-            let mut addr_bytes = [0u8; 32];
-            addr_bytes.copy_from_slice(&members_flat[offset..offset + 32]);
-            members[i] = Address::new_from_array(addr_bytes);
-        }
-
         self.multisig.set_inner(MultisigAccountInner {
-            create_key: *self.create_key.address(),
+            create_key,
             threshold,
             member_count,
             tx_index: 0,
             dwallet: Address::new_from_array(dwallet),
-            members,
+            members: members_flat,
         });
         Ok(())
     }
 }
 
 #[derive(Accounts)]
+#[instruction(tx_index: u32)]
 pub struct CreateTransaction {
     #[account(mut)]
     pub multisig: Account<MultisigAccount>,
 
-    /// tx_index key -- its address encodes the current tx_index for the PDA seed.
-    pub tx_index_key: UncheckedAccount,
-
     #[account(
         init,
         payer = payer,
-        seeds = MultisigTransaction::seeds(multisig, tx_index_key),
+        seeds = MultisigTransaction::seeds(multisig, tx_index),
         bump,
     )]
     pub transaction: Account<MultisigTransaction>,
@@ -228,6 +221,7 @@ impl CreateTransaction {
     #[inline(always)]
     pub fn create(
         &mut self,
+        tx_index: u32,
         message_hash: [u8; 32],
         user_pubkey: [u8; 32],
         signature_scheme: u16,
@@ -241,13 +235,18 @@ impl CreateTransaction {
             MultisigError::MessageDataTooLarge
         );
 
+        // Verify tx_index matches current multisig counter.
+        let current_tx_index: u32 = self.multisig.tx_index.into();
+        require!(
+            tx_index == current_tx_index,
+            MultisigError::InvalidThreshold
+        );
+
         // Verify proposer is a member.
         require!(
             is_member_quasar(&self.multisig, self.proposer.address()),
             MultisigError::NotAMember
         );
-
-        let tx_index: u32 = self.multisig.tx_index.into();
 
         self.transaction.set_inner(MultisigTransactionInner {
             multisig: *self.multisig.address(),

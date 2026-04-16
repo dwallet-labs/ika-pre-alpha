@@ -8,16 +8,8 @@
 //! has been transferred to this program's CPI authority PDA. When enough "yes"
 //! votes are cast (reaching quorum), the program automatically CPI-calls
 //! `approve_message` on the dWallet program to authorize signing.
-//!
-//! This is the Quasar equivalent of the Pinocchio `ika-example-voting` program.
-//!
-//! # Seed components
-//!
-//! Quasar uses account addresses as PDA seed components. The `proposal_id`
-//! account's address provides the 32-byte proposal identifier seed (same bytes
-//! as the Pinocchio version's instruction-data `proposal_id`).
 
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 
 use ika_dwallet_quasar::DWalletContext;
 use quasar_lang::prelude::*;
@@ -34,6 +26,7 @@ mod voting_quasar {
     #[instruction(discriminator = 0)]
     pub fn create_proposal(
         ctx: Ctx<CreateProposal>,
+        proposal_id: Address,
         message_digest: [u8; 32],
         user_pubkey: [u8; 32],
         signature_scheme: u16,
@@ -41,6 +34,7 @@ mod voting_quasar {
         message_approval_bump: u8,
     ) -> Result<(), ProgramError> {
         ctx.accounts.create(
+            proposal_id,
             message_digest,
             user_pubkey,
             signature_scheme,
@@ -53,10 +47,11 @@ mod voting_quasar {
     #[instruction(discriminator = 1)]
     pub fn cast_vote(
         ctx: Ctx<CastVote>,
+        proposal_id: Address,
         vote: bool,
         cpi_authority_bump: u8,
     ) -> Result<(), ProgramError> {
-        ctx.accounts.cast(vote, cpi_authority_bump)
+        ctx.accounts.cast(proposal_id, vote, cpi_authority_bump)
     }
 }
 
@@ -98,10 +93,8 @@ pub enum VotingError {
 // ── Accounts ──
 
 #[derive(Accounts)]
+#[instruction(proposal_id: Address)]
 pub struct CreateProposal {
-    /// Proposal identifier -- its address is the 32-byte seed.
-    pub proposal_id: UncheckedAccount,
-
     #[account(init, payer = payer, seeds = Proposal::seeds(proposal_id), bump)]
     pub proposal: Account<Proposal>,
 
@@ -120,6 +113,7 @@ impl CreateProposal {
     #[inline(always)]
     pub fn create(
         &mut self,
+        proposal_id: Address,
         message_digest: [u8; 32],
         user_pubkey: [u8; 32],
         signature_scheme: u16,
@@ -129,7 +123,7 @@ impl CreateProposal {
         require!(quorum > 0, VotingError::InvalidQuorum);
 
         self.proposal.set_inner(ProposalInner {
-            proposal_id: *self.proposal_id.address(),
+            proposal_id,
             dwallet: *self.dwallet.address(),
             message_digest,
             user_pubkey,
@@ -146,10 +140,8 @@ impl CreateProposal {
 }
 
 #[derive(Accounts)]
+#[instruction(proposal_id: Address)]
 pub struct CastVote {
-    /// Proposal identifier -- its address is the 32-byte seed.
-    pub proposal_id: UncheckedAccount,
-
     #[account(mut, seeds = Proposal::seeds(proposal_id), bump)]
     pub proposal: Account<Proposal>,
 
@@ -189,13 +181,14 @@ impl CastVote {
     #[inline(always)]
     pub fn cast(
         &mut self,
+        proposal_id: Address,
         vote: bool,
         cpi_authority_bump: u8,
     ) -> Result<(), ProgramError> {
         // Record vote.
         self.vote_record.set_inner(VoteRecordInner {
             voter: *self.voter.address(),
-            proposal_id: *self.proposal_id.address(),
+            proposal_id,
             vote: if vote { 1 } else { 0 },
         });
 

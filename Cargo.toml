@@ -1,22 +1,24 @@
 [workspace]
 resolver = "2"
+exclude = [
+    "chains/solana/program-sdk/quasar",
+    "chains/solana/examples/voting/quasar",
+    "chains/solana/examples/multisig/quasar",
+]
 members = [
     "crates/ika-grpc",
     "crates/ika-dwallet-types",
     "chains/solana/program-sdk/pinocchio",
     "chains/solana/program-sdk/anchor",
     "chains/solana/program-sdk/native",
-    "chains/solana/program-sdk/quasar",
     "chains/solana/sdk/types",
     "chains/solana/clients/rust",
     "chains/solana/examples/voting/pinocchio",
     "chains/solana/examples/voting/native",
     "chains/solana/examples/voting/anchor",
-    "chains/solana/examples/voting/quasar",
     "chains/solana/examples/multisig/pinocchio",
     "chains/solana/examples/multisig/anchor",
     "chains/solana/examples/multisig/native",
-    "chains/solana/examples/multisig/quasar",
 ]
 
 [workspace.package]

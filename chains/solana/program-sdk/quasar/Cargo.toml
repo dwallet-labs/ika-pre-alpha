@@ -1,14 +1,18 @@
 [package]
 name = "ika-dwallet-quasar"
-version.workspace = true
-authors.workspace = true
-license.workspace = true
-publish.workspace = true
-edition.workspace = true
+version = "0.1.0"
+authors = ["dWallet Labs"]
+license = "BSD-3-Clause-Clear"
+publish = false
+edition = "2021"
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ['cfg(target_os, values("solana"))']
+
+[lib]
+crate-type = ["lib"]
 
 [dependencies]
-quasar-lang = { workspace = true }
-solana-instruction-view = { workspace = true }
-
-[lints]
-workspace = true
+quasar-lang = { git = "https://github.com/blueshift-gg/quasar" }
+solana-instruction-view = { version = "2.0.0", features = ["cpi"] }
