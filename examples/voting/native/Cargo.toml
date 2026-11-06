@@ -1,0 +1,39 @@
+[package]
+name = "ika-example-voting-native"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish.workspace = true
+edition.workspace = true
+
+[dependencies]
+solana-program = "2.2"
+ika-dwallet-native = { workspace = true }
+
+[dev-dependencies]
+mollusk-svm = { workspace = true }
+solana-account = { workspace = true }
+solana-instruction = { workspace = true }
+solana-pubkey = { workspace = true }
+solana-program-error = { workspace = true }
+ika-dwallet-litesvm-test = { path = "../../../crates/ika-dwallet-litesvm-test" }
+solana-keypair = "^3.0"
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+# The network the program is deployed on, which names the only ika
+# program it calls (`ID` of the SDK crate). Build for the Solana devnet
+# pre-alpha with `--features devnet-pre-alpha`, and for a local validator
+# with `--features localnet`.
+devnet-pre-alpha = ["ika-dwallet-native/devnet-pre-alpha"]
+devnet-alpha1 = ["ika-dwallet-native/devnet-alpha1"]
+devnet-alpha2 = ["ika-dwallet-native/devnet-alpha2"]
+devnet-beta = ["ika-dwallet-native/devnet-beta"]
+devnet = ["ika-dwallet-native/devnet"]
+mainnet = ["ika-dwallet-native/mainnet"]
+localnet = ["ika-dwallet-native/localnet"]

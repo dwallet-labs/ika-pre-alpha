@@ -1,0 +1,10 @@
+{
+	// Type-checks the source and the tests together, without emitting.
+	"extends": "./tsconfig.json",
+	"include": ["src", "test"],
+	"compilerOptions": {
+		"rootDir": ".",
+		"emitDeclarationOnly": false,
+		"noEmit": true
+	}
+}

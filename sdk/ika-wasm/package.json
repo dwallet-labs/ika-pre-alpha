@@ -1,0 +1,25 @@
+{
+	"name": "@ika.xyz/ika-wasm",
+	"description": "The user's half of the ika dWallet protocol, compiled to WebAssembly.",
+	"author": "dWallet Labs, Ltd. <dev@dwalletlabs.com>",
+	"version": "0.4.0-pre-alpha",
+	"license": "BSD-3-Clause-Clear",
+	"types": "./dist/web/dwallet_mpc_wasm.d.ts",
+	"exports": {
+		".": {
+			"browser": "./dist/web/dwallet_mpc_wasm.js",
+			"node": "./dist/node/dwallet_mpc_wasm.js",
+			"default": "./dist/bundler/dwallet_mpc_wasm.js",
+			"types": "./dist/web/dwallet_mpc_wasm.d.ts"
+		},
+		"./web": {
+			"import": "./dist/web/dwallet_mpc_wasm.js",
+			"types": "./dist/web/dwallet_mpc_wasm.d.ts"
+		},
+		"./node": {
+			"import": "./dist/node/dwallet_mpc_wasm.js",
+			"types": "./dist/node/dwallet_mpc_wasm.d.ts"
+		}
+	},
+	"files": ["LICENSE", "README.md", "dist/**"]
+}

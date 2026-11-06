@@ -1,0 +1,54 @@
+name: Programs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  # The Agave release whose `cargo build-sbf` ships platform-tools v1.54.
+  SOLANA_CLI_VERSION: "v4.2.2"
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+
+jobs:
+  programs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install the Solana CLI
+        run: |
+          set -euo pipefail
+          sh -c "$(curl -sSfL https://release.anza.xyz/${SOLANA_CLI_VERSION}/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      # The native examples use `solana_program::system_instruction`, which
+      # solana-program 2.2 marks deprecated.
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings -A deprecated
+
+      - name: Build the example programs
+        run: ./scripts/build-programs.sh
+
+      - name: Tests (Mollusk and LiteSVM)
+        run: cargo test --workspace
+
+      - name: The examples also build for the devnet pre-alpha
+        run: ./scripts/build-programs.sh devnet-pre-alpha

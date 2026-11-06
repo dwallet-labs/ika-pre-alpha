@@ -1,0 +1,22 @@
+{
+	"name": "@ika/solana-examples",
+	"private": true,
+	"type": "module",
+	"description": "The TypeScript end-to-end demos of the voting and multisig examples, and the code they share.",
+	"scripts": {
+		"typecheck": "tsc -p tsconfig.json",
+		"voting": "tsx voting/e2e/main.ts",
+		"multisig": "tsx multisig/e2e/main.ts"
+	},
+	"dependencies": {
+		"@ika.xyz/sdk-core": "workspace:*",
+		"@ika.xyz/sdk-solana": "workspace:*",
+		"@noble/curves": "^2.3.0",
+		"@solana/web3.js": "^1.98.0"
+	},
+	"devDependencies": {
+		"@types/node": "^24.13.3",
+		"tsx": "^4.23.0",
+		"typescript": "^6.0.3"
+	}
+}

@@ -1,0 +1,7 @@
+{
+	"test_only": "derived from a fixed public seed; never a real validator key",
+	"seed_text": "ika-grpc-tls-test-validator-two!",
+	"seed_hex": "696b612d677270632d746c732d746573742d76616c696461746f722d74776f21",
+	"network_public_key_hex": "c46cae017318bbd2b6a005e5d959725497d84bbae1ccde7db96a23fb7c7680b7",
+	"certificate_pem": "-----BEGIN CERTIFICATE-----\nMIIBJDCB16ADAgECAhRbQ1gIAg4w0+V0Ft6fEM4KTLD4cTAFBgMrZXAwITEfMB0G\nA1UEAwwWcmNnZW4gc2VsZiBzaWduZWQgY2VydDAgFw03NTAxMDEwMDAwMDBaGA80\nMDk2MDEwMTAwMDAwMFowITEfMB0GA1UEAwwWcmNnZW4gc2VsZiBzaWduZWQgY2Vy\ndDAqMAUGAytlcAMhAMRsrgFzGLvStqAF5dlZclSX2Eu64czefblqI/t8doC3ox8w\nHTAbBgNVHREEFDASghBpa2EtZHdhbGxldC1ncnBjMAUGAytlcANBAK0Wyf3gkvA6\nm5pc6w7T4fa+C0zj3y+zAGOm9Lf69qvhUtUrV8Vsk4uwudRfF8XNYEjmJ7AQOFLs\nlWrTj5UtPQw=\n-----END CERTIFICATE-----\n"
+}

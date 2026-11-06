@@ -1,0 +1,48 @@
+[package]
+name = "ika-example-voting-anchor"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish.workspace = true
+edition.workspace = true
+
+[dependencies]
+anchor-lang = { workspace = true }
+ika-dwallet-anchor = { workspace = true }
+
+[dev-dependencies]
+mollusk-svm = { workspace = true }
+solana-account = { workspace = true }
+solana-instruction = { workspace = true }
+solana-pubkey = { workspace = true }
+ika-dwallet-litesvm-test = { path = "../../../crates/ika-dwallet-litesvm-test" }
+solana-keypair = "^3.0"
+solana-program-error = "^3.0"
+
+[features]
+# The network the program is deployed on, which names the only ika
+# program it calls (`ID` of the SDK crate). Build for the Solana devnet
+# pre-alpha with `--features devnet-pre-alpha`, and for a local validator
+# with `--features localnet`.
+devnet-pre-alpha = ["ika-dwallet-anchor/devnet-pre-alpha"]
+devnet-alpha1 = ["ika-dwallet-anchor/devnet-alpha1"]
+devnet-alpha2 = ["ika-dwallet-anchor/devnet-alpha2"]
+devnet-beta = ["ika-dwallet-anchor/devnet-beta"]
+devnet = ["ika-dwallet-anchor/devnet"]
+mainnet = ["ika-dwallet-anchor/mainnet"]
+localnet = ["ika-dwallet-anchor/localnet"]
+no-entrypoint = []
+cpi = ["no-entrypoint"]
+
+[lints.clippy]
+arithmetic_side_effects = "deny"
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = [
+    'cfg(target_os, values("solana"))',
+    'cfg(feature, values("custom-heap", "custom-panic", "anchor-debug", "no-log-ix-name"))',
+]
+
+[lib]
+crate-type = ["cdylib", "lib"]

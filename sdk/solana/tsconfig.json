@@ -1,0 +1,22 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"strict": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		// build-package compiles the JavaScript with esbuild and asks tsc only
+		// for the declaration files. `tsconfig.test.json` type-checks the tests.
+		"declaration": true,
+		"emitDeclarationOnly": true,
+		"rootDir": "src",
+		"outDir": "dist/esm",
+		"types": ["node"],
+		// The classic SDK's lib set and unused-locals check, which this
+		// package has kept since its tests read the SDK's source.
+		"lib": ["dom", "esnext"],
+		"noUnusedLocals": true
+	},
+	"include": ["src"]
+}

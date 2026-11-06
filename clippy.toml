@@ -1,0 +1,3 @@
+# A CPI call to the ika program takes every account and argument the
+# instruction needs, so its helpers take more than the default seven.
+too-many-arguments-threshold = 20

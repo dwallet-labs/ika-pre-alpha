@@ -1,0 +1,32 @@
+# Rust
+target/
+**/*.rs.bk
+
+# Solana
+test-ledger/
+
+# Node
+node_modules/
+dist/
+# The crypto WASM ships compiled.
+!sdk/ika-wasm/dist/
+.turbo/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keys (don't commit real keys)
+keys/*.json
+!keys/README.md
+
+# Env
+.env
+.env.local
