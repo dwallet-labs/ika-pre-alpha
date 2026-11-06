@@ -1,0 +1,24 @@
+[package]
+name = "ika-protocol-program-id"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish.workspace = true
+edition.workspace = true
+description = "The ika protocol program's address on each network: the one place it is written"
+
+# One network feature picks the address. The protocol program and the three
+# program SDK crates (ika-dwallet-pinocchio, -native, -anchor) forward these
+# same features here, so a build names its network once.
+[features]
+default = []
+devnet-pre-alpha = []
+devnet-alpha1 = []
+devnet-alpha2 = []
+devnet-beta = []
+devnet = []
+mainnet = []
+localnet = []
+
+[lints]
+workspace = true

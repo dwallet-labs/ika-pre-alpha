@@ -1,0 +1,41 @@
+[package]
+name = "ika-example-multisig"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish.workspace = true
+edition.workspace = true
+
+[dependencies]
+pinocchio = { workspace = true }
+pinocchio-system = { workspace = true }
+solana-address = { workspace = true }
+ika-dwallet-pinocchio = { workspace = true }
+
+[dev-dependencies]
+mollusk-svm = { workspace = true }
+solana-account = { workspace = true }
+solana-instruction = { workspace = true }
+solana-pubkey = { workspace = true }
+solana-program-error = { workspace = true }
+ika-dwallet-litesvm-test = { path = "../../../crates/ika-dwallet-litesvm-test" }
+solana-keypair = "^3.0"
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+# The network the program is deployed on, which names the only ika
+# program it calls (`ID` of the SDK crate). Build for the Solana devnet
+# pre-alpha with `--features devnet-pre-alpha`, and for a local validator
+# with `--features localnet`.
+devnet-pre-alpha = ["ika-dwallet-pinocchio/devnet-pre-alpha"]
+devnet-alpha1 = ["ika-dwallet-pinocchio/devnet-alpha1"]
+devnet-alpha2 = ["ika-dwallet-pinocchio/devnet-alpha2"]
+devnet-beta = ["ika-dwallet-pinocchio/devnet-beta"]
+devnet = ["ika-dwallet-pinocchio/devnet"]
+mainnet = ["ika-dwallet-pinocchio/mainnet"]
+localnet = ["ika-dwallet-pinocchio/localnet"]

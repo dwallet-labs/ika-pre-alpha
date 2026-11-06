@@ -1,0 +1,33 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const centralized_and_decentralized_parties_dkg_output_match: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+export const create_dkg_centralized_output_v1: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const create_dkg_centralized_output_v2: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+export const create_imported_dwallet_centralized_step: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+export const create_sign_centralized_party_message: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => [number, number, number];
+export const create_sign_centralized_party_message_ecdsa_blake2b256: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number) => [number, number, number];
+export const create_sign_centralized_party_message_with_centralized_party_dkg_output: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => [number, number, number];
+export const decrypt_user_share: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
+export const dwallet_output_at_latest_version: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+export const dwallet_version: (a: number, b: number) => [number, number, number];
+export const encrypt_secret_share: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+export const generate_secp_cg_keypair_from_seed: (a: number, b: number, c: number) => [number, number, number];
+export const generate_secp_cg_keypair_from_seed_v2: (a: number, b: number, c: number) => [number, number, number];
+export const network_dkg_public_output_to_protocol_pp: (a: number, b: number, c: number) => [number, number, number];
+export const network_key_version: (a: number, b: number) => [number, number, number];
+export const parse_signature_from_sign_output: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const public_key_from_centralized_dkg_output: (a: number, b: number, c: number) => [number, number, number];
+export const public_key_from_dwallet_output: (a: number, b: number, c: number) => [number, number, number];
+export const reconfiguration_public_output_to_protocol_pp: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+export const sample_dwallet_keypair: (a: number, b: number) => [number, number, number];
+export const verify_ecdsa_blake2b256_signature: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number];
+export const verify_signature: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number) => [number, number];
+export const verify_user_share: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+export const __wbindgen_malloc: (a: number, b: number) => number;
+export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_exn_store: (a: number) => void;
+export const __externref_table_alloc: () => number;
+export const __wbindgen_export_4: WebAssembly.Table;
+export const __externref_table_dealloc: (a: number) => void;
+export const __wbindgen_start: () => void;

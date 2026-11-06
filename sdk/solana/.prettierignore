@@ -1,0 +1,3 @@
+dist/
+# Generated from the program's wire table.
+src/wire-tables-data.ts

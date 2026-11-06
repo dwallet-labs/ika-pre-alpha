@@ -1,0 +1,29 @@
+[package]
+name = "ika-dwallet-anchor"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish.workspace = true
+edition.workspace = true
+
+[dependencies]
+anchor-lang = { workspace = true }
+ika-protocol-program-id = { workspace = true }
+
+# The network whose ika program `ID` names, and the only program
+# `DWalletContext` calls as the dWallet program. A program that holds dWallets
+# turns on the same one as its deployment: `devnet-pre-alpha` for the Solana
+# devnet pre-alpha. With none, `ID` is the local development placeholder the
+# test suites load the program at.
+[features]
+default = []
+devnet-pre-alpha = ["ika-protocol-program-id/devnet-pre-alpha"]
+devnet-alpha1 = ["ika-protocol-program-id/devnet-alpha1"]
+devnet-alpha2 = ["ika-protocol-program-id/devnet-alpha2"]
+devnet-beta = ["ika-protocol-program-id/devnet-beta"]
+devnet = ["ika-protocol-program-id/devnet"]
+mainnet = ["ika-protocol-program-id/mainnet"]
+localnet = ["ika-protocol-program-id/localnet"]
+
+[lints]
+workspace = true

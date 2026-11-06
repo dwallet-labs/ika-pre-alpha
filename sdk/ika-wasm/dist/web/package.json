@@ -1,0 +1,20 @@
+{
+  "name": "dwallet-mpc-wasm",
+  "type": "module",
+  "collaborators": [
+    "dWallet Labs, Ltd. <dev@dwalletlabs.com>"
+  ],
+  "description": "Ika wasm bindings for dwallet MPC centralized party",
+  "version": "0.2.0",
+  "license": "BSD-3-Clause-Clear",
+  "files": [
+    "dwallet_mpc_wasm_bg.wasm",
+    "dwallet_mpc_wasm.js",
+    "dwallet_mpc_wasm.d.ts"
+  ],
+  "main": "dwallet_mpc_wasm.js",
+  "types": "dwallet_mpc_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

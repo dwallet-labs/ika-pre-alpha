@@ -1,0 +1,86 @@
+{
+	"name": "@ika.xyz/sdk-solana",
+	"author": "dWallet Labs, Ltd. <dev@dwalletlabs.com>",
+	"version": "0.1.0-pre-alpha.0",
+	"description": "The Solana part of the ika dWallet SDK: the ika program's derived addresses, instruction bytes, account discriminators, account readers and instruction builders, and the IkaClient and IkaTransaction classes.",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/dwallet-labs/ika-pre-alpha",
+		"directory": "sdk/solana"
+	},
+	"license": "BSD-3-Clause-Clear",
+	"type": "module",
+	"sideEffects": false,
+	"files": [
+		"CHANGELOG.md",
+		"dist"
+	],
+	"engines": {
+		"node": ">=22.12.0"
+	},
+	"main": "./dist/esm/index.js",
+	"module": "./dist/esm/index.js",
+	"types": "./dist/esm/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/esm/index.d.ts",
+			"import": "./dist/esm/index.js",
+			"default": "./dist/esm/index.js"
+		},
+		"./instructions": {
+			"types": "./dist/esm/instructions.d.ts",
+			"import": "./dist/esm/instructions.js",
+			"default": "./dist/esm/instructions.js"
+		},
+		"./web3": {
+			"types": "./dist/esm/web3/index.d.ts",
+			"import": "./dist/esm/web3/index.js",
+			"default": "./dist/esm/web3/index.js"
+		},
+		"./kit": {
+			"types": "./dist/esm/kit/index.d.ts",
+			"import": "./dist/esm/kit/index.js",
+			"default": "./dist/esm/kit/index.js"
+		}
+	},
+	"scripts": {
+		"build": "node ../../scripts/build-package.mjs",
+		"typecheck": "tsc -p tsconfig.test.json",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@ika.xyz/sdk-core": "workspace:*",
+		"@mysten/bcs": "^2.1.0",
+		"@noble/curves": "^2.2.0",
+		"@noble/hashes": "^2.2.0",
+		"buffer": "^6.0.3"
+	},
+	"peerDependencies": {
+		"@solana/kit": "^8.4.0",
+		"@solana/web3.js": "^1.98.0"
+	},
+	"peerDependenciesMeta": {
+		"@solana/kit": {
+			"optional": true
+		},
+		"@solana/web3.js": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@solana/kit": "8.4.0",
+		"@solana/web3.js": "^1.98.0",
+		"@types/node": "^24.13.3",
+		"tsx": "^4.23.0",
+		"typescript": "^6.0.3",
+		"vitest": "4.1.9",
+		"esbuild": "^0.28.1"
+	},
+	"publishConfig": {
+		"access": "public",
+		"tag": "pre-alpha"
+	},
+	"bugs": {
+		"url": "https://github.com/dwallet-labs/ika-pre-alpha/issues"
+	}
+}

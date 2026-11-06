@@ -1,0 +1,23 @@
+{
+	// Type-checks the test tree, which `tsconfig.json` does not: its
+	// `include` is `src` alone, and vitest transpiles without checking.
+	//
+	// `src` is included because the tests import it by relative path, so it
+	// has to be in the program for their imports to resolve.
+	"extends": "./tsconfig.json",
+	"include": ["src", "test"],
+	// The consumer fixtures compile against the packed package, not `src`,
+	// and `bad.ts` holds deliberate type errors. `test:consumers` checks them.
+	"exclude": ["test/consumers"],
+	"compilerOptions": {
+		"rootDir": ".",
+		"composite": false,
+		// Checking only; the real build still emits from tsconfig.json.
+		"emitDeclarationOnly": false,
+		"noEmit": true,
+		// The one relaxation. Test helpers take parameters they accept for a
+		// shared signature and do not read; unused LOCALS stay checked,
+		// because those are the ones that indicate a mistake.
+		"noUnusedParameters": false
+	}
+}

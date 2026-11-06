@@ -1,0 +1,24 @@
+[package]
+name = "ika-dwallet-litesvm-test"
+description = "Run a program that holds dWallets under LiteSVM, with the ika program loaded from bin/"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish.workspace = true
+edition.workspace = true
+
+[dependencies]
+ika-protocol-program-id = { workspace = true }
+litesvm = { workspace = true }
+solana-account = { workspace = true }
+solana-address = { workspace = true }
+solana-hash = { workspace = true }
+solana-instruction = { workspace = true }
+solana-keypair = { workspace = true }
+solana-program-error = { workspace = true }
+solana-pubkey = { workspace = true }
+solana-signer = { workspace = true }
+solana-transaction = { workspace = true }
+
+[lints]
+workspace = true

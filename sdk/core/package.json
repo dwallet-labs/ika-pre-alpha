@@ -1,0 +1,89 @@
+{
+	"name": "@ika.xyz/sdk-core",
+	"author": "dWallet Labs, Ltd. <dev@dwalletlabs.com>",
+	"description": "The chain-neutral core of the ika dWallet network client: request building and signing, the request and response BCS types, attestation checks, and the user's half of the cryptography.",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/dwallet-labs/ika-pre-alpha",
+		"directory": "sdk/core"
+	},
+	"version": "0.1.0-pre-alpha.0",
+	"license": "BSD-3-Clause-Clear",
+	"sideEffects": false,
+	"files": [
+		"CHANGELOG.md",
+		"dist"
+	],
+	"engines": {
+		"node": ">=22.12.0"
+	},
+	"type": "module",
+	"main": "./dist/esm/index.js",
+	"module": "./dist/esm/index.js",
+	"types": "./dist/esm/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/esm/index.d.ts",
+			"import": "./dist/esm/index.js",
+			"default": "./dist/esm/index.js"
+		},
+		"./client": {
+			"types": "./dist/esm/grpc/client.d.ts",
+			"import": "./dist/esm/grpc/client.js",
+			"default": "./dist/esm/grpc/client.js"
+		},
+		"./web": {
+			"types": "./dist/esm/grpc/web.d.ts",
+			"import": "./dist/esm/grpc/web.js",
+			"default": "./dist/esm/grpc/web.js"
+		},
+		"./auto": {
+			"types": "./dist/esm/grpc/client.d.ts",
+			"browser": "./dist/esm/grpc/web.js",
+			"node": "./dist/esm/grpc/client.js",
+			"default": "./dist/esm/grpc/web.js"
+		},
+		"./common": {
+			"types": "./dist/esm/common/index.d.ts",
+			"import": "./dist/esm/common/index.js",
+			"default": "./dist/esm/common/index.js"
+		},
+		"./mock": {
+			"types": "./dist/esm/mock.d.ts",
+			"import": "./dist/esm/mock.js",
+			"default": "./dist/esm/mock.js"
+		},
+		"./wasm-worker": {
+			"import": "./dist/esm/client/wasm-worker.js",
+			"default": "./dist/esm/client/wasm-worker.js"
+		}
+	},
+	"scripts": {
+		"build": "node ../../scripts/build-package.mjs",
+		"typecheck:test": "tsc -p tsconfig.test.json",
+		"test": "NODE_OPTIONS=\"--max-old-space-size=8192\" vitest run",
+		"test:unit": "NODE_OPTIONS=\"--max-old-space-size=8192\" vitest run test/unit"
+	},
+	"bugs": {
+		"url": "https://github.com/dwallet-labs/ika-pre-alpha/issues"
+	},
+	"publishConfig": {
+		"access": "public",
+		"tag": "pre-alpha"
+	},
+	"devDependencies": {
+		"@types/node": "^24.13.3",
+		"esbuild": "^0.28.1",
+		"typescript": "^6.0.3",
+		"vitest": "4.1.9"
+	},
+	"dependencies": {
+		"@grpc/grpc-js": "^1.14.5",
+		"@grpc/proto-loader": "^0.7.13",
+		"@ika.xyz/ika-wasm": "workspace:*",
+		"@mysten/bcs": "^2.1.0",
+		"@noble/curves": "^2.3.0",
+		"@noble/hashes": "^2.3.0",
+		"protobufjs": "^7.6.5"
+	}
+}

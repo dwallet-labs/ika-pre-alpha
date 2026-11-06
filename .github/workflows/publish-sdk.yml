@@ -1,0 +1,64 @@
+# Publishes the three SDK packages to npm under the `pre-alpha` dist-tag:
+# @ika.xyz/ika-wasm, @ika.xyz/sdk-core and @ika.xyz/sdk-solana, at the
+# versions their package.json files name. `npm install <name>` keeps
+# resolving to the `latest` tag. Only `<name>@pre-alpha` gets these.
+#
+# Run it by hand from the Actions tab. Leave `dry_run` on to see what
+# would be published. The repository needs an `NPM_TOKEN` secret that can
+# publish to the @ika.xyz scope, stored in the `npm-publish` environment
+# (Settings > Environments). Give that environment required reviewers, so
+# every publish waits for an approval before the token is handed out. A
+# version already on npm fails the publish, so raise the versions in a
+# commit before publishing again.
+name: Publish SDK (pre-alpha)
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only show what would be published"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: npm-publish
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+        with:
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24.x
+          registry-url: "https://registry.npmjs.org"
+
+      # Only the publish step below sees the npm token.
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test
+
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=(--filter "./sdk/*" --no-git-checks --access public --tag pre-alpha)
+          if [ "$DRY_RUN" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          # pnpm publishes in dependency order and replaces each
+          # `workspace:*` with the exact version it publishes.
+          pnpm -r publish "${args[@]}"
