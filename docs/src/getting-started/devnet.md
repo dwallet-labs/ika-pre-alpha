@@ -59,8 +59,9 @@ See [mock mode in the TypeScript SDK](../frameworks/typescript.md#mock-mode-for-
 
 ## Paying for requests
 
-Each request to the ika network is charged to a gas deposit on Solana. A gas deposit belongs to a
-request key, and the SDK derives the request key from the user's root seed. So a user needs one gas
+Each request to the ika network is charged to a gas deposit on Solana. A gas deposit pays for one
+request key, and the SDK derives the request key from the user's root seed. The wallet that creates
+the deposit owns it, and only that wallet can withdraw from it. So a user needs one gas
 deposit for each root seed, whatever curves their dWallets use. A request signed by a key with no
 deposit is refused with "this transport key has no gas deposit on the chain the request names".
 

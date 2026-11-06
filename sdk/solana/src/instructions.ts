@@ -131,10 +131,15 @@ export function depositProofMessage(
  * The two instructions that open a gas deposit.
  *
  * The network charges the key that SIGNED a request rather than the
- * transaction's fee payer, so the deposit belongs to `requestKey`. The
- * `sender` is whoever signs and pays the transaction, and the two need not
- * be the same: a browser page holds a request key in memory while the
- * connected wallet pays.
+ * transaction's fee payer, so the deposit pays for `requestKey`'s requests.
+ * The `sender` signs the transaction and OWNS the deposit: only the
+ * sender's signature requests and claims a withdrawal, and the claim pays
+ * the SOL to the sender. The request key cannot withdraw. A browser page
+ * may hold a request key in memory while the connected wallet opens the
+ * deposit; losing the request key loses no funds, because the wallet owns
+ * them. The owner may be a program's address that signs through
+ * `invoke_signed`, and `transferGasDepositInstruction` hands the deposit
+ * to a new owner.
  *
  * That is what the proof of possession is for. The request key signs a
  * message naming the SENDER's address, and the program does not take that
@@ -223,7 +228,10 @@ export function topUpInstruction(params: {
 	payer: PublicKey;
 	ikaTokenAccount: PublicKey;
 	treasuryVault: PublicKey;
-	/** IKA in INKU, which is 10^-9 IKA. */
+	/**
+	 * IKA in the base units of the Solana IKA mint. The mint has eight
+	 * decimals, so one unit is 10^-8 IKA and one IKA is `100_000_000n`.
+	 */
 	ikaAmount: bigint;
 	solAmount: bigint;
 }): TransactionInstruction {
@@ -246,6 +254,191 @@ export function topUpInstruction(params: {
 			{ pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
 			{ pubkey: payer, isSigner: true, isWritable: true },
 			{ pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+		],
+		data: Buffer.from(data),
+	});
+}
+
+/**
+ * Request a withdrawal from a gas deposit.
+ *
+ * Only the deposit's owner signs it: the wallet that opened the deposit, or
+ * the owner a `TransferGasDeposit` named since. The request key cannot. A
+ * request replaces any pending one and advances the deposit's withdrawal
+ * counter, so a release the network signed for an older request no longer
+ * pays. The amounts may not exceed the balances net of debt.
+ */
+export function requestWithdrawInstruction(params: {
+	programId: PublicKey;
+	/** The deposit's owner, which has to sign. */
+	owner: PublicKey;
+	deposit: PublicKey;
+	/**
+	 * IKA in the base units of the Solana IKA mint. The mint has eight
+	 * decimals, so one unit is 10^-8 IKA and one IKA is `100_000_000n`.
+	 */
+	ikaAmount: bigint;
+	solAmount: bigint;
+}): TransactionInstruction {
+	const { programId, owner, deposit, ikaAmount, solAmount } = params;
+
+	const data = new Uint8Array(17);
+	data[0] = instructionByte('DWalletRequestWithdraw');
+	const amounts = new DataView(data.buffer, data.byteOffset, data.byteLength);
+	amounts.setBigUint64(1, ikaAmount, true);
+	amounts.setBigUint64(9, solAmount, true);
+
+	return new TransactionInstruction({
+		programId,
+		keys: [
+			{ pubkey: owner, isSigner: true, isWritable: false },
+			{ pubkey: deposit, isSigner: false, isWritable: true },
+			{ pubkey: coordinatorAddress(programId), isSigner: false, isWritable: false },
+		],
+		data: Buffer.from(data),
+	});
+}
+
+/** The first bytes of every Solana gas release the network signs. */
+const GAS_RELEASE_PREFIX = new Uint8Array([
+	0xff,
+	...new TextEncoder().encode('solana-gas-release'),
+]);
+
+/**
+ * The 139 bytes the network signs to release a requested withdrawal, the
+ * bytes the program rebuilds: `0xFF || "solana-gas-release" ||
+ * program id || deposit || request key || withdrawal counter (u64 LE) || IKA
+ * amount (u64 LE) || SOL amount (u64 LE)`.
+ */
+export function gasReleaseMessage(params: {
+	programId: PublicKey;
+	deposit: PublicKey;
+	requestPublicKey: Uint8Array;
+	withdrawalSequence: bigint;
+	ikaAmount: bigint;
+	solAmount: bigint;
+}): Uint8Array {
+	const message = new Uint8Array(GAS_RELEASE_PREFIX.length + 32 * 3 + 8 * 3);
+	message.set(GAS_RELEASE_PREFIX, 0);
+	let offset = GAS_RELEASE_PREFIX.length;
+	message.set(params.programId.toBytes(), offset);
+	offset += 32;
+	message.set(params.deposit.toBytes(), offset);
+	offset += 32;
+	message.set(params.requestPublicKey, offset);
+	offset += 32;
+	const view = new DataView(message.buffer);
+	view.setBigUint64(offset, params.withdrawalSequence, true);
+	view.setBigUint64(offset + 8, params.ikaAmount, true);
+	view.setBigUint64(offset + 16, params.solAmount, true);
+	return message;
+}
+
+/**
+ * The two instructions that claim a requested withdrawal: the Ed25519
+ * precompile of the network's release, then `Withdraw`.
+ *
+ * Only the deposit's owner signs the claim. The SOL goes to the owner and
+ * the IKA to `ikaTokenAccount`, a token account the owner names. The release
+ * is the network key's signature over `gasReleaseMessage` for the pending
+ * request; the program reads it back from the instruction just before the
+ * claim, so the two go into one transaction in this order. A program that
+ * owns a deposit and claims by CPI puts the precompile just before its own
+ * instruction instead.
+ */
+export function withdrawInstructions(params: {
+	programId: PublicKey;
+	/** The deposit's owner, which has to sign. It receives the SOL. */
+	owner: PublicKey;
+	deposit: PublicKey;
+	/** The request key the deposit pays for; the release names it. */
+	requestPublicKey: Uint8Array;
+	/** Receives the IKA. */
+	ikaTokenAccount: PublicKey;
+	/** The coordinator's treasury vault. */
+	treasuryVault: PublicKey;
+	/** The network key's public key, which signed the release. */
+	networkPublicKey: Uint8Array;
+	release: {
+		withdrawalSequence: bigint;
+		ikaAmount: bigint;
+		solAmount: bigint;
+		signature: Uint8Array;
+	};
+}): TransactionInstruction[] {
+	const { programId, owner, deposit, requestPublicKey, release } = params;
+	const message = gasReleaseMessage({
+		programId,
+		deposit,
+		requestPublicKey,
+		withdrawalSequence: release.withdrawalSequence,
+		ikaAmount: release.ikaAmount,
+		solAmount: release.solAmount,
+	});
+
+	const data = new Uint8Array(73);
+	data[0] = instructionByte('DWalletWithdraw');
+	new DataView(data.buffer).setBigUint64(1, release.withdrawalSequence, true);
+	data.set(release.signature, 9);
+
+	const vaultAuthority = new PublicKey(
+		findProgramAddress([new TextEncoder().encode('vault_authority')], programId.toBytes()).address,
+	);
+	const networkKey = new PublicKey(
+		networkEncryptionKeyPda(programId.toBytes(), params.networkPublicKey).address,
+	);
+	return [
+		Ed25519Program.createInstructionWithPublicKey({
+			publicKey: params.networkPublicKey,
+			message,
+			signature: release.signature,
+		}),
+		new TransactionInstruction({
+			programId,
+			keys: [
+				{ pubkey: owner, isSigner: true, isWritable: true },
+				{ pubkey: deposit, isSigner: false, isWritable: true },
+				{ pubkey: coordinatorAddress(programId), isSigner: false, isWritable: false },
+				{ pubkey: params.ikaTokenAccount, isSigner: false, isWritable: true },
+				{ pubkey: params.treasuryVault, isSigner: false, isWritable: true },
+				{ pubkey: vaultAuthority, isSigner: false, isWritable: false },
+				{ pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+				{ pubkey: networkKey, isSigner: false, isWritable: false },
+				{ pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
+			],
+			data: Buffer.from(data),
+		}),
+	];
+}
+
+/**
+ * Hand a gas deposit to a new owner.
+ *
+ * The current owner signs and names the new owner, who alone requests and
+ * claims the deposit's withdrawals from then on. The request key the
+ * deposit pays for does not change.
+ */
+export function transferGasDepositInstruction(params: {
+	programId: PublicKey;
+	/** The current owner, which has to sign. */
+	owner: PublicKey;
+	deposit: PublicKey;
+	newOwner: PublicKey;
+}): TransactionInstruction {
+	const { programId, owner, deposit, newOwner } = params;
+
+	const data = new Uint8Array(33);
+	data[0] = instructionByte('DWalletTransferGasDeposit');
+	data.set(newOwner.toBytes(), 1);
+
+	return new TransactionInstruction({
+		programId,
+		keys: [
+			{ pubkey: owner, isSigner: true, isWritable: false },
+			{ pubkey: deposit, isSigner: false, isWritable: true },
+			{ pubkey: eventAuthorityAddress(programId), isSigner: false, isWritable: false },
+			{ pubkey: programId, isSigner: false, isWritable: false },
 		],
 		data: Buffer.from(data),
 	});

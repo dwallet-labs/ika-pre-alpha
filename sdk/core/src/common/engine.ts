@@ -40,6 +40,7 @@ import {
 	realCryptography,
 	recordOfAttestation,
 	reEncryptShareRequest,
+	requestNetworkValue,
 	requestSigningMessage,
 	signatureAlgorithmOnCurve,
 	signatureFromResponseVerified,
@@ -55,8 +56,8 @@ import {
 	verifyMakeSharePublicAnswer,
 	verifyNetworkKeyOutput,
 	verifyPresignAnswer,
+	verifyPublicShareDkgAnswer,
 	verifyReEncryptShareAnswer,
-	verifySignatureWithScheme,
 	VersionedDWalletDataAttestationBcs,
 } from '../index.js';
 import type {
@@ -735,7 +736,9 @@ export class Network {
 		const preimage = freshPreimage();
 		const sessionIdentifier = this.#sessionIdentifier(requester, epoch, preimage);
 		const { request, kept } = await build(epoch, sessionIdentifier);
-		const signed = await sign(signedData(requester, epoch, preimage, request));
+		const signed = await sign(
+			signedData(requester, requestNetworkValue(this.network), epoch, preimage, request),
+		);
 		const sent = { epoch, sessionIdentifier, kept };
 		let answer: TransactionResponseData;
 		try {
@@ -1165,30 +1168,21 @@ export class Network {
 			));
 			signature = signedDuringDkg(attestation);
 		} else {
-			({ publicKey, publicOutput, signature } = await this.#checkPublicShareDkg(
-				requester,
-				attestation,
-				sent.sessionIdentifier,
-				prepared.userPublicOutput,
-				sentSign,
+			// A public-share DKG has no acceptance, so its answer, with the
+			// sign-during-DKG signature, is checked here.
+			({ publicKey, publicOutput, signature } = await verifyPublicShareDkgAnswer(
+				response,
+				this.#trustedNetworkKeys,
+				{
+					sessionIdentifier: sent.sessionIdentifier,
+					intendedChainSender: requester.intendedChainSender,
+					curve: this.curve,
+					networkKeyId: this.networkKeyId,
+					userPublicOutput: prepared.userPublicOutput,
+					signDuringDkg: sentSign,
+				},
+				this.cryptography,
 			));
-		}
-		// The holder's acceptance already verified the signature of an
-		// encrypted-share DKG; a public-share DKG has no acceptance, so its
-		// signature is verified here.
-		if (sentSign !== undefined && share === undefined) {
-			if (signature === null) {
-				throw new Error('the dWallet attestation holds no sign-during-DKG signature');
-			}
-			await verifySignatureWithScheme({
-				cryptography: this.cryptography,
-				curve: this.curveNumber,
-				signatureScheme: sentSign.signatureScheme,
-				message: sentSign.message,
-				messageMetadata: sentSign.messageMetadata,
-				dWalletPublicOutput: publicOutput,
-				signature,
-			});
 		}
 		return {
 			dwallet: {
@@ -1252,52 +1246,6 @@ export class Network {
 			throw new Error(`the presign cannot carry a sign during DKG: ${problem[1]}`);
 		}
 		return presign;
-	}
-
-	/** The checks of a public-share DKG's answer (see {@link createDWalletWithPublicShare}). */
-	async #checkPublicShareDkg(
-		requester: Requester,
-		attestation: HeldAttestation,
-		sessionIdentifier: Uint8Array,
-		userPublicOutput: Uint8Array,
-		sentSign: { message: Uint8Array } | undefined,
-	): Promise<{ publicKey: Uint8Array; publicOutput: Uint8Array; signature: Uint8Array | null }> {
-		const data = VersionedDWalletDataAttestationBcs.parse(
-			Uint8Array.from(attestation.attestation_data),
-		).V1!;
-		requireAttested('session_identifier', sameBytes(data.session_identifier, sessionIdentifier));
-		requireAttested(
-			'intended_chain_sender',
-			sameBytes(data.intended_chain_sender, requester.intendedChainSender),
-		);
-		requireAttested('curve', ATTESTATION_CURVES.indexOf(data.curve.$kind) === this.curveNumber);
-		requireAttested('is_imported_key', !data.is_imported_key);
-		requireAttested(
-			'holder',
-			data.holder == null && data.encryption_key_hash == null && data.encrypted_share_hash == null,
-		);
-		requireAttested(
-			'sign_during_dkg_signature',
-			(data.sign_during_dkg_signature == null) === (sentSign === undefined),
-		);
-		const publicOutput = Uint8Array.from(data.public_output);
-		requireAttested(
-			'public_output',
-			await this.cryptography.userAndNetworkDKGOutputMatch(
-				this.curve,
-				userPublicOutput,
-				publicOutput,
-			),
-		);
-		const publicKey = Uint8Array.from(data.public_key);
-		requireAttested(
-			'public_key',
-			sameBytes(
-				publicKey,
-				await this.cryptography.publicKeyFromDWalletOutput(this.curve, publicOutput),
-			),
-		);
-		return { publicKey, publicOutput, signature: signedDuringDkg(attestation) };
 	}
 
 	/**
@@ -2115,11 +2063,18 @@ function customOrListed(network: IkaNetwork, keys: readonly Uint8Array[]): Trust
 		: trustedNetworkKeys(network);
 }
 
-function signedData(requester: Requester, epoch: bigint, preimage: Uint8Array, request: any) {
+function signedData(
+	requester: Requester,
+	network: number,
+	epoch: bigint,
+	preimage: Uint8Array,
+	request: any,
+) {
 	return {
 		session_identifier_preimage: Array.from(preimage),
 		epoch,
 		chain_id: { [requester.chain]: null } as any,
+		network,
 		intended_chain_sender: Array.from(requester.intendedChainSender),
 		request,
 	};
@@ -2173,12 +2128,6 @@ function signedDuringDkg(attestation: HeldAttestation): Uint8Array | null {
 		Uint8Array.from(attestation.attestation_data),
 	).V1!.sign_during_dkg_signature;
 	return signature == null ? null : Uint8Array.from(signature);
-}
-
-function requireAttested(field: string, holds: boolean): void {
-	if (!holds) {
-		throw new Error(`the dWallet attestation's ${field} is not what this request sent`);
-	}
 }
 
 function freshPreimage(): Uint8Array {

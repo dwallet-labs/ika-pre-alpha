@@ -130,6 +130,21 @@ export function deployedNetworkValue(name: DeployedNetworkName): number {
 	return IKA_DEPLOYED_NETWORKS[name].network;
 }
 
+/** The network value of a local network, which a custom network is. */
+export const LOCAL_NETWORK_VALUE = 3;
+
+/**
+ * The network value a request to `network` carries in its signed bytes
+ * (`network` in `SignedRequestDataBcs`), right after the chain: the listed
+ * value of mainnet and testnet, and 3 for a custom network, which the
+ * validators run as a local network. A validator refuses a request that
+ * names another network than its own, so a request signed for testnet
+ * never runs on mainnet.
+ */
+export function requestNetworkValue(network: IkaNetwork): number {
+	return typeof network === 'string' ? deployedNetworkValue(network) : LOCAL_NETWORK_VALUE;
+}
+
 /**
  * The chain number the Sui coordinator of `name` records, as this SDK ships
  * it. Throws while it is zero, because the new flow is not deployed there

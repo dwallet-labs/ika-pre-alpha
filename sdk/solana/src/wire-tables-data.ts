@@ -18,6 +18,8 @@ const tables = {
 		"DWalletCommitDWallet": 132,
 		"DWalletCreateDeposit": 136,
 		"DWalletTopUp": 137,
+		"DWalletRequestWithdraw": 141,
+		"DWalletWithdraw": 142,
 		"DWalletPauseSigningParameter": 151,
 		"DWalletUnpauseSigningParameter": 152,
 		"DWalletRegisterEncryptionKey": 153,
@@ -26,7 +28,8 @@ const tables = {
 		"DWalletRevokeSignatureVoucher": 158,
 		"DWalletTransferSignatureVoucher": 159,
 		"DWalletIssueFutureSignatureVoucher": 161,
-		"DWalletAcceptEncryptedUserShare": 165
+		"DWalletAcceptEncryptedUserShare": 165,
+		"DWalletTransferGasDeposit": 166
 	},
 	"accounts": {
 		"SystemState": {
@@ -52,7 +55,7 @@ const tables = {
 		"GasDeposit": {
 			"discriminator": 99,
 			"version": 1,
-			"data_len": 147
+			"data_len": 179
 		},
 		"EncryptedUserSecretKeyShare": {
 			"discriminator": 101,

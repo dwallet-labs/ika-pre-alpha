@@ -21,7 +21,8 @@ instructions with `Paused` (4030):
 Every other instruction ignores the flag. These keep working while paused:
 
 - every instruction the network signs, so results already started are still written;
-- `TopUp`, `RequestWithdraw` and `Withdraw`, so users can always fund or empty a deposit;
+- `TopUp`, `RequestWithdraw`, `Withdraw` and `TransferGasDeposit`, so users can always fund,
+  empty or hand over a deposit;
 - `TransferOwnership` and the voucher owner's controls, so an owner can always move a dWallet or
   narrow a voucher.
 

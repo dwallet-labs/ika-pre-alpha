@@ -34,8 +34,8 @@ Three kinds of signer send dWallet instructions.
 | 137 | `TopUp` | anyone |
 | 138 | `SettleGas` | the network |
 | 140 | `CommitSignature` | the network |
-| 141 | `RequestWithdraw` | the deposit's request key |
-| 142 | `Withdraw` | the deposit's request key, with a release the network signed |
+| 141 | `RequestWithdraw` | the deposit's owner |
+| 142 | `Withdraw` | the deposit's owner, with a release the network signed |
 | 143 | `Initialize` | the program's upgrade authority, once at deployment |
 | 144 | `AdvanceEpoch` | the network |
 | 145 | `SettleGasWithoutDelivery` | the network |
@@ -54,6 +54,7 @@ Three kinds of signer send dWallet instructions.
 | 163 | `CommitPartialUserSignature` | the network |
 | 164 | `SetChainIdentifier` | the network |
 | 165 | `AcceptEncryptedUserShare` | anyone, with a signature from the holder |
+| 166 | `TransferGasDeposit` | the deposit's owner |
 | 228 | `EmitEvent` | the program itself, to emit an event |
 
 Numbers 128, 133, 139, 146, 154, 155, 160 and 162 belonged to instructions that were removed.
@@ -188,8 +189,8 @@ network (u8) || 32 || the signer's address (32)
 ```
 
 All integers are little-endian. The chain number and the network are the coordinator's. The
-signer is account 0, the wallet that creates the deposit. A paused coordinator refuses the
-instruction (`Paused`, 4030).
+signer is account 0, the wallet that creates the deposit. It becomes the deposit's owner, the
+only key that can withdraw. A paused coordinator refuses the instruction (`Paused`, 4030).
 
 Data, 97 bytes:
 
@@ -234,15 +235,19 @@ Accounts:
 
 ### RequestWithdraw (141) and Withdraw (142)
 
-A deposit's request key takes its unspent funds back in two steps. `RequestWithdraw` records
-the amounts. `Withdraw` pays them out, once the network has signed a release for that request.
+A deposit's owner takes its unspent funds back in two steps. `RequestWithdraw` records the
+amounts. `Withdraw` pays them out, once the network has signed a release for that request. Both
+refuse any signer but the owner, the request key included, with `AuthorityMismatch` (4004). The
+owner may be a program's address that signs through `invoke_signed`. A program that claims by CPI
+puts the precompile just before its own instruction in the transaction.
 
 `RequestWithdraw` data, 16 bytes: `ika_amount` (u64), then `sol_amount` (u64). Accounts: the
-request key (signer), the deposit (writable), the coordinator.
+owner (signer), the deposit (writable), the coordinator.
 
 `Withdraw` data, 72 bytes: `withdrawal_sequence` (u64), then the network's signature (64).
-Accounts, in order: the request key (signer, writable), the deposit (writable), the coordinator,
-the request key's IKA token account (writable), the treasury vault (writable), the vault
+Accounts, in order: the owner (signer, writable; it receives the SOL), the deposit (writable),
+the coordinator, the IKA token account the owner names (writable; it receives the IKA), the
+treasury vault (writable), the vault
 authority `["vault_authority"]`, the SPL Token program, the network key's
 `NetworkEncryptionKey`, and the instructions sysvar. An Ed25519 precompile instruction with the
 network's signature must come right before it. The signed release is:
@@ -254,6 +259,15 @@ withdrawal_sequence (u64) || ika_amount (u64) || sol_amount (u64)
 
 The mock network charges nothing and signs no release. On the devnet pre-alpha, a deposit's
 funds stay where they are.
+
+### TransferGasDeposit (166)
+
+The deposit's owner names a new owner. A zero owner is refused with `InvalidAuthority`, and any
+other signer with `AuthorityMismatch` (4004). It advances the deposit's `sequence` and emits
+`GasDepositTransferred` (126). A pause does not stop it.
+
+Data, 32 bytes: `new_owner` (32). Accounts, in order: the owner (signer), the deposit (writable),
+the event authority, the program.
 
 ## Encryption keys and shares
 

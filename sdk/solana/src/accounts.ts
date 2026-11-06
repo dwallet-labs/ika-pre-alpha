@@ -295,6 +295,12 @@ export interface GasDepositAccount {
 	ikaDebt: bigint;
 	solDebt: bigint;
 	sequence: bigint;
+	/**
+	 * The deposit's owner: the wallet that opened it, or the owner a
+	 * `TransferGasDeposit` named since. Only its signature requests and
+	 * claims a withdrawal. The transport key only pays for requests.
+	 */
+	owner: Uint8Array;
 }
 
 /**
@@ -319,6 +325,7 @@ export function readGasDeposit(data: Uint8Array): GasDepositAccount | null {
 		ikaDebt: readU64(data, 123),
 		solDebt: readU64(data, 131),
 		sequence: readU64(data, 139),
+		owner: data.subarray(147, 179),
 	};
 }
 

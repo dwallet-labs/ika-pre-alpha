@@ -18,7 +18,7 @@ returned.
 
 | Code | Name | When |
 |---|---|---|
-| 4004 | `AuthorityMismatch` | A withdrawal is requested or claimed by a key that is not the deposit's own |
+| 4004 | `AuthorityMismatch` | A withdrawal is requested or claimed, or a deposit is handed to a new owner, by a key that is not the deposit's owner. The request key is refused too |
 | 4005 | `InvalidDWalletState` | The dWallet is not Active: a voucher, a transfer or an accept needs it Active, or waiting for its holder |
 | 4007 | `InvalidCurve` | The network committed a curve the program does not number |
 | 4009 | `InvalidAttestation` | A signed message is not where the instruction expects it. For example, no Ed25519 precompile instruction comes right before an accept |

@@ -28,7 +28,7 @@ tell you which type an account is. The tag does.
 | `DWalletCoordinator` | 96 | 631 | `["dwallet_coordinator"]` |
 | `DWallet` | 97 | 185 | see [The dWallet's address](#the-dwallets-address) |
 | `NetworkEncryptionKey` | 98 | 199 | `["network_encryption_key", noa_public_key]` |
-| `GasDeposit` | 99 | 147 | `["gas_deposit", user_pubkey]` |
+| `GasDeposit` | 99 | 179 | `["gas_deposit", user_pubkey]` |
 | `EncryptedUserSecretKeyShare` | 101 | header 214 | `["dwallet", "encrypted_user_share", root, holder]` |
 | `NetworkReconfigurationOutput` | 102 | 182 | `["network_reconfig", noa_public_key, epoch_le]` |
 | `DWalletAttestation` | 104 | header 101 | see [Attestation accounts](#dwalletattestation-tag-104) |
@@ -166,8 +166,9 @@ One per network key and epoch in which the key was reconfigured.
 
 ## GasDeposit (tag 99)
 
-One per request key: the Ed25519 key that signs the user's gRPC requests. See
-[Gas Deposits](../on-chain/gas-deposits.md).
+One per request key: the Ed25519 key that signs the user's gRPC requests. The wallet that
+creates it owns it (`owner`). Only the owner requests and claims a withdrawal; the request key only
+pays for requests. See [Gas Deposits](../on-chain/gas-deposits.md).
 
 | Offset | Field | Size | Meaning |
 |---|---|---|---|
@@ -187,6 +188,7 @@ One per request key: the Ed25519 key that signs the user's gRPC requests. See
 | 123 | `ika_debt` | 8 | IKA charged beyond the balance. The next charge takes it first |
 | 131 | `sol_debt` | 8 | Lamports charged beyond the balance |
 | 139 | `sequence` | 8 | Counts every change to the account. 1 at creation |
+| 147 | `owner` | 32 | The deposit's owner: the wallet that signed `CreateDeposit`, or the owner a `TransferGasDeposit` named since |
 
 ## GasCharge (tag 106)
 
