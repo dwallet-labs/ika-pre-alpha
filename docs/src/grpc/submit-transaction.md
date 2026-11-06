@@ -56,6 +56,7 @@ pub struct SignedRequestData {
     pub session_identifier_preimage: [u8; 32],
     pub epoch: u64,
     pub chain_id: ChainId,             // the chain the request is for: Solana here
+    pub network: u8,                   // 1 mainnet, 2 testnet, 3 a local network
     pub intended_chain_sender: Vec<u8>,
     pub request: DWalletRequest,
 }
@@ -66,6 +67,7 @@ pub struct SignedRequestData {
 | `session_identifier_preimage` | 32 random bytes. With the epoch and the request key, it names the request's session |
 | `epoch` | The epoch the chain shows. On Solana, the `DWalletCoordinator`'s `epoch` |
 | `chain_id` | The chain the result is written to. `Solana` for this program |
+| `network` | The network the request is for: 1 mainnet, 2 testnet, 3 a local network. A validator refuses a request for another network, free of charge |
 | `intended_chain_sender` | The user's 32-byte Solana address. A new dWallet's owner is this address |
 | `request` | The operation. See [Request Types](./request-types.md) |
 

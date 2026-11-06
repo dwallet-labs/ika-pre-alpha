@@ -286,6 +286,9 @@ export const SignedRequestDataBcs = bcs.struct('SignedRequestData', {
 	session_identifier_preimage: bcs.fixedArray(32, bcs.u8()),
 	epoch: bcs.u64(),
 	chain_id: ChainIdBcs,
+	// The network the request is for: 1 mainnet, 2 testnet, 3 a local
+	// network (`requestNetworkValue`). A validator refuses another network's.
+	network: bcs.u8(),
 	intended_chain_sender: bcs.vector(bcs.u8()),
 	request: DWalletRequestBcs,
 });

@@ -36,6 +36,7 @@ function sign(lengths: {
 		session_identifier_preimage: new Uint8Array(32),
 		epoch: 1n,
 		chain_id: { Sui: null },
+		network: 3,
 		intended_chain_sender: new Uint8Array(32),
 		request: {
 			Sign: {
@@ -115,6 +116,7 @@ function dkgWithASign(messageLength: number) {
 		session_identifier_preimage: new Uint8Array(32),
 		epoch: 1n,
 		chain_id: { Sui: null },
+		network: 3,
 		intended_chain_sender: new Uint8Array(32),
 		request: {
 			Dkg: {

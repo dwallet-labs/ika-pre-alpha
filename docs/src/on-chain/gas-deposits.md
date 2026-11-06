@@ -10,9 +10,13 @@ write results on Solana.
 
 ## One deposit per request key
 
-A user signs every gRPC request with an Ed25519 key, the request key. The deposit belongs to that
-key, not to a Solana wallet: it lives at `["gas_deposit", user_pubkey]`, where `user_pubkey` is
-the request key.
+A user signs every gRPC request with an Ed25519 key, the request key. The deposit pays for that
+key's requests: it lives at `["gas_deposit", user_pubkey]`, where `user_pubkey` is the request
+key.
+
+The wallet that creates the deposit owns it (`owner`). Only the owner's signature requests and
+claims a withdrawal. The request key only pays for requests and cannot withdraw. The owner can be a
+program's address that signs through `invoke_signed`.
 
 So a user who makes a new request key needs a new deposit. A request signed by a key with no
 deposit is refused with:
@@ -29,7 +33,8 @@ must have its own deposit, or its sign request is refused.
 `CreateDeposit` creates the account. The request key must agree to it: it signs a message that
 names this chain, this deployment's network, and the wallet that creates the deposit. That
 signature is checked by the Ed25519 precompile, in an instruction before `CreateDeposit` in the
-same transaction. Anyone can pay the rent.
+same transaction. Anyone can pay the rent. The wallet that signs `CreateDeposit` becomes the
+deposit's owner.
 
 A paused coordinator refuses `CreateDeposit`. See [Pauses](./pauses.md).
 
@@ -58,17 +63,29 @@ its balance never changes.
 
 ## Taking funds back
 
-The request key takes unspent funds back in two steps:
+The deposit's owner takes unspent funds back in two steps:
 
 1. `RequestWithdraw` records the IKA and SOL amounts to take.
 2. The network signs a release for that request. `Withdraw` sends it, after an Ed25519 precompile
-   instruction with the network's signature, and pays out.
+   instruction with the network's signature, and pays out. The SOL goes to the owner, and the IKA
+   to a token account the owner names.
+
+The owner signs both instructions. Any other signer, the request key included, is refused with
+`AuthorityMismatch`. A program that claims by CPI puts the precompile just before its own
+instruction in the transaction, because the check reads the instruction just before the current
+top-level instruction.
 
 A new request or a successful claim makes an older release useless. The payout is at most the
 balance minus the debt.
 
 The mock network signs no release. On the devnet pre-alpha, funds put into a deposit stay there.
 Put nothing into a pre-alpha deposit.
+
+## Handing a deposit to a new owner
+
+`TransferGasDeposit` names a new owner. The current owner signs it. A zero owner is refused with
+`InvalidAuthority`, and any other signer with `AuthorityMismatch`. It advances `sequence` and emits
+`GasDepositTransferred`. A pause does not stop it.
 
 ## The account
 
@@ -82,3 +99,4 @@ fields a client reads most:
 | 42 | `sol_balance` | Lamports available |
 | 123 | `ika_debt` | IKA owed |
 | 131 | `sol_debt` | Lamports owed |
+| 147 | `owner` | The wallet that may withdraw: the signer of `CreateDeposit`, or the owner a `TransferGasDeposit` named since |

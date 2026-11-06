@@ -36,6 +36,7 @@ const SIGN_REQUEST = {
 	session_identifier_preimage: filled(32, 0xab),
 	epoch: 7n,
 	chain_id: { Solana: null },
+	network: 3,
 	intended_chain_sender: filled(32, 0x55),
 	request: {
 		Sign: {
@@ -59,6 +60,7 @@ const VECTOR =
 	'abababababababababababababababababababababababababababababababab' +
 	'0700000000000000' + // epoch, little-endian
 	'00' + // chain_id: Solana is variant 0
+	'03' + // network: a local network
 	'20' +
 	'5555555555555555555555555555555555555555555555555555555555555555' +
 	'01' + // request: Sign is variant 1

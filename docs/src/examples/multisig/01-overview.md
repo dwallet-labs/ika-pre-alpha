@@ -113,7 +113,8 @@ The [E2E Demo](./04-e2e.md#running-the-react-page) page shows how to run it.
 
 The page holds two kinds of key. The connected wallet owns the dWallet, pays for every transaction,
 and signs the multisig's instructions. The user's keys, made from a root seed in the tab, sign the
-gRPC requests. Their request key owns the gas deposit those requests are charged to.
+gRPC requests. Those requests are charged to the gas deposit of their request key. The connected
+wallet creates that deposit, so it owns it, and only it can withdraw from it.
 
 ## Testing
 

@@ -48,6 +48,7 @@ signature is at offset 176. See [Signature Vouchers](../on-chain/signature-vouch
 | 123 | `EncryptedShareAccepted` | `AcceptEncryptedUserShare` |
 | 124 | `GasChargedWithoutDelivery` | `SettleGasCharge` |
 | 125 | `DWalletActivated` | `AcceptEncryptedUserShare` or `CommitPublicUserSecretKeyShare` |
+| 126 | `GasDepositTransferred` | `TransferGasDeposit` |
 
 ### DWalletCommitted (113)
 
@@ -136,6 +137,18 @@ created for that session, and there is nothing to accept.
 | `epoch` | 8 | The epoch |
 | `reason` | 1 | 0 a plain charge, 1 a dWallet commit ended, 2 a share commit ended |
 | `ended_session_identifier` | 32 | The ended commit's session. Zeros for reason 0 |
+
+### GasDepositTransferred (126)
+
+A deposit's owner handed it to a new owner.
+
+| Field | Size | Meaning |
+|---|---|---|
+| `gas_deposit` | 32 | The deposit's address |
+| `user_pubkey` | 32 | The request key the deposit pays for |
+| `previous_owner` | 32 | The owner before the transfer |
+| `new_owner` | 32 | The owner from now on |
+| `sequence` | 8 | The deposit's `sequence` after the transfer |
 
 ## Network and coordinator events
 

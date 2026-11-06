@@ -8,9 +8,12 @@
  * once it decodes. Nothing in that answer proves it answers the request that
  * was sent: a validator, or anyone on a plaintext connection, can answer with
  * an old attestation that the trusted network key once signed. So each of the
- * four requests below has a check of its answer, which the caller runs on the
+ * five requests below has a check of its answer, which the caller runs on the
  * answer before it treats the request as done:
  *
+ * - `verifyPublicShareDkgAnswer`, for a `Dkg` whose user share is public. A
+ *   `Dkg` with an encrypted share is checked by its holder's acceptance
+ *   (`signDWalletShareAcceptance`);
  * - `verifyPresignAnswer`, for a `Presign` or a `PresignForDWallet`;
  * - `verifyMakeSharePublicAnswer`, for a `MakeSharePublic`;
  * - `verifyReEncryptShareAnswer`, for a `ReEncryptShare`;
@@ -36,7 +39,12 @@
  */
 import { keccak_256 } from '@noble/hashes/sha3.js';
 
+import { fromCurveToNumber } from '../client/hash-signature-validation.js';
+import type { Curve } from '../client/types.js';
+import { realCryptography } from '../client/user-cryptography.js';
+import type { UserCryptography } from '../client/user-cryptography.js';
 import {
+	ATTESTATION_CURVES,
 	AttestationRecordError,
 	recordOfAttestation,
 	verifyAttestationNetworkKey,
@@ -56,6 +64,7 @@ import {
 } from './bcs.js';
 import type { DWalletCurveBcs, DWalletSignatureAlgorithmBcs } from './bcs.js';
 import type { IkaNetwork, TrustedNetworkKeys } from './deployed-networks.js';
+import type { SentSignDuringDkg } from './dwallet-share-acceptance.js';
 import { futureSignMessageDigests } from './requests.js';
 import type {
 	DWalletSignatureSchemeInput,
@@ -63,6 +72,7 @@ import type {
 	PartialUserSignatureAttestation,
 } from './requests.js';
 import { dwalletAttestationDigest } from './share-acceptance.js';
+import { verifySignatureWithScheme } from './signature-verification.js';
 import type { TransactionResponseData } from './types.js';
 
 function equalBytes(left: ArrayLike<number>, right: ArrayLike<number>): boolean {
@@ -484,4 +494,157 @@ export function verifyPresignAnswer(
 		'the dWallet the request named, or none for a global presign',
 	);
 	return attestation;
+}
+
+/**
+ * What a `Dkg` request whose user share is public sent. Every value is the
+ * caller's own: none is read from the answer.
+ */
+export interface SentPublicShareDkg {
+	/** The request's session identifier (`grpcSessionIdentifier`), 32 bytes. */
+	sessionIdentifier: Uint8Array;
+	/** The request's `intended_chain_sender`. */
+	intendedChainSender: Uint8Array;
+	/** The curve the request named. */
+	curve: Curve;
+	/**
+	 * The network key the request named (`network_key_id`), 32 bytes. The
+	 * attestation must name it as the key that holds the dWallet's network
+	 * share (`network_pubkey`), and it must be one of the trusted keys.
+	 */
+	networkKeyId: Uint8Array;
+	/** The user's own public output, the request's `user_public_output`. */
+	userPublicOutput: Uint8Array;
+	/** The sign during DKG the request asked for; leave it out when it asked for none. */
+	signDuringDkg?: SentSignDuringDkg;
+}
+
+/** What a checked public-share DKG answer gives the caller. */
+export interface PublicShareDkgAnswer {
+	/** The attestation, as the answer carried it. */
+	attestation: HeldAttestation;
+	/** The dWallet's public key, the attestation's `public_key`. */
+	publicKey: Uint8Array;
+	/** The network's DKG public output, the attestation's `public_output`. */
+	publicOutput: Uint8Array;
+	/** The sign-during-DKG signature, or `null` when none was asked for. */
+	signature: Uint8Array | null;
+}
+
+/**
+ * Check the answer to a `Dkg` request whose user share is public: the
+ * dWallet's attestation. No holder accepts such a dWallet: the network
+ * commits it once the key generation completes, so this check is all that
+ * stands before the dWallet is used. Without it, one validator could answer
+ * with any dWallet attestation the trusted key signed, and the caller would
+ * take that dWallet's key as its own.
+ *
+ * The checks, in order. The first that fails throws:
+ * 1. The answer is an attestation, not an `Error` or a `Signature`, and it
+ *    names `sent.networkKeyId` as its `network_pubkey`.
+ * 2. Its signer is one of `trustedNetworkKeys`, and its signature verifies
+ *    under that signer as a dWallet attestation.
+ * 3. The key that holds the dWallet's network share is also one of the
+ *    trusted keys (`verifyAttestationNetworkKey` with the trusted keys, field
+ *    `network_pubkey`).
+ * 4. It decodes as exactly one V1 dWallet attestation (check `decode`).
+ * 5. The session identifier, the chain sender and the curve are the ones
+ *    sent, and the dWallet is not imported (fields `session_identifier`,
+ *    `intended_chain_sender`, `curve`, `is_imported_key`).
+ * 6. The attestation names no holder, encryption key or encrypted share
+ *    (field `holder`).
+ * 7. The attested public output matches the user's own (field
+ *    `public_output`), and the attested public key is the key inside it
+ *    (field `public_key`).
+ * 8. A signature is there exactly when a sign during DKG was sent (field
+ *    `sign_during_dkg_signature`), and it verifies under the dWallet's key
+ *    for the message, metadata and scheme sent (`verifySignatureWithScheme`).
+ *
+ * Every refusal of a field is an `AttestationRecordError` with check
+ * `binding` that names the field. The Rust SDK makes the same checks.
+ *
+ * `cryptography` is the client's cryptography. Absent means the 2PC-MPC
+ * protocol, which refuses a mock dWallet's output.
+ */
+export async function verifyPublicShareDkgAnswer(
+	response: TransactionResponseData,
+	trustedNetworkKeys: TrustedNetworkKeys,
+	sent: SentPublicShareDkg,
+	cryptography: UserCryptography = realCryptography,
+): Promise<PublicShareDkgAnswer> {
+	const answer = attestationOfAnswer(response, trustedNetworkKeys.network, sent.networkKeyId);
+	verifyAttestationRecord(recordOfAttestation(answer), trustedNetworkKeys, 'dwallet');
+	verifyAttestationNetworkKey(
+		answer.network_pubkey,
+		sent.networkKeyId,
+		trustedNetworkKeys.network,
+		trustedNetworkKeys,
+	);
+	const data = decodeV1(VersionedDWalletDataAttestationBcs, answer.attestation_data, 'dWallet');
+	requireSent(
+		'session_identifier',
+		equalBytes(data.session_identifier, sent.sessionIdentifier),
+		"the creating request's session identifier",
+	);
+	requireSent(
+		'intended_chain_sender',
+		equalBytes(data.intended_chain_sender, sent.intendedChainSender),
+		'the chain sender the request named',
+	);
+	requireSent(
+		'curve',
+		ATTESTATION_CURVES.indexOf(data.curve.$kind) === fromCurveToNumber(sent.curve),
+		'the curve the request named',
+	);
+	requireSent('is_imported_key', !data.is_imported_key, 'false for a DKG');
+	requireSent(
+		'holder',
+		data.holder == null && data.encryption_key_hash == null && data.encrypted_share_hash == null,
+		'absent, with no encryption key or encrypted share, for a public share',
+	);
+	const publicOutput = Uint8Array.from(data.public_output);
+	requireSent(
+		'public_output',
+		await cryptography.userAndNetworkDKGOutputMatch(
+			sent.curve,
+			sent.userPublicOutput,
+			publicOutput,
+		),
+		"an output that matches the user's public output",
+	);
+	const publicKey = Uint8Array.from(data.public_key);
+	requireSent(
+		'public_key',
+		equalBytes(publicKey, await cryptography.publicKeyFromDWalletOutput(sent.curve, publicOutput)),
+		'the public key inside its public output',
+	);
+	const signature =
+		data.sign_during_dkg_signature == null ? null : Uint8Array.from(data.sign_during_dkg_signature);
+	requireSent(
+		'sign_during_dkg_signature',
+		(signature === null) === (sent.signDuringDkg === undefined),
+		'present exactly when a sign during DKG was sent',
+	);
+	if (sent.signDuringDkg !== undefined && signature !== null) {
+		await verifySignatureWithScheme({
+			cryptography,
+			curve: fromCurveToNumber(sent.curve),
+			signatureScheme: sent.signDuringDkg.signatureScheme,
+			message: sent.signDuringDkg.message,
+			messageMetadata: sent.signDuringDkg.messageMetadata,
+			dWalletPublicOutput: publicOutput,
+			signature,
+		});
+	}
+	return {
+		attestation: {
+			attestation_data: Uint8Array.from(answer.attestation_data),
+			network_signature: Uint8Array.from(answer.network_signature),
+			network_pubkey: Uint8Array.from(answer.network_pubkey),
+			signer_noa_public_key: Uint8Array.from(answer.signer_noa_public_key),
+		},
+		publicKey,
+		publicOutput,
+		signature,
+	};
 }
