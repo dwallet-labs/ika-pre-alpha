@@ -8,9 +8,9 @@
  * its own, and takes a new one when that presign expires before the sign is
  * sent. A sign whose epoch closes before an answer is never sent again.
  */
-import { Curve, fromCurveToNumber, VersionedDWalletDataAttestationBcs } from '@ika.xyz/sdk-core';
-import { EpochClosedBeforeAnswer, PresignExpiredWithTheEpoch } from '@ika.xyz/sdk-core/common';
-import type { DWallet, Network, Presign, VoucherApproval } from '@ika.xyz/sdk-core/common';
+import { Curve, fromCurveToNumber, VersionedDWalletDataAttestationBcs } from '@ika.xyz/pre-alpha-core';
+import { EpochClosedBeforeAnswer, PresignExpiredWithTheEpoch } from '@ika.xyz/pre-alpha-core/common';
+import type { DWallet, Network, Presign, VoucherApproval } from '@ika.xyz/pre-alpha-core/common';
 import { keccak_256 } from '@noble/hashes/sha3.js';
 import { Connection, Keypair } from '@solana/web3.js';
 import type { PublicKey } from '@solana/web3.js';

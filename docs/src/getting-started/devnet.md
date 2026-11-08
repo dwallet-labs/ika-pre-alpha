@@ -13,13 +13,13 @@ about it.
 | --- | --- |
 | Solana cluster | devnet |
 | Solana RPC | `https://api.devnet.solana.com`, or your own devnet RPC provider |
-| ika program | `CqGtQgrYFUhobuknomFNntwoxCgKGkBRUtemgdPuM9qT` |
+| ika program | `8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv` |
 | ika network, gRPC-Web | `https://solana-alpha-dev-1.ika-network.net` |
 | Network key | `fe8a6482521cc4bae052c55cd5b3c92d05c8749bcc2c584046de3efb077d65ed` |
 | Chain number | `1` |
 | Network value | `3` |
-| IKA mint | `2hncrdGVjmRtDFQ4bsNkoJd5XuR2v1DKiUX7aSRUA3H1` |
-| Treasury vault | `476J1DYngyTv6uqQ7pooJ6Mv1rxsZNdbd4h6A2vmRNFc` |
+| IKA mint | `9NxjShUBEGVzHePwseToSjuH7MXKVphcmVd7XzHj2K22` |
+| Treasury vault | `8wFLkRY3MnmxdNKvUtDH1pfvYyjZNDtpWPhYnm2w5ZW5` |
 
 The SDK needs the network key, the chain number and the network value when you create the client.
 A gas deposit's top-up names the IKA mint and the treasury vault.
@@ -34,12 +34,12 @@ network key. When it does, this page changes with it.
 ## Connecting
 
 The pre-alpha serves the ika network's API over gRPC-Web, with a public TLS certificate. Use the
-SDK's gRPC-Web client, `DWalletGrpcClient` from `@ika.xyz/sdk-core/web`. It works in a browser and
+SDK's gRPC-Web client, `DWalletGrpcClient` from `@ika.xyz/pre-alpha-core/web`. It works in a browser and
 in Node, because it sends its calls through `fetch`. A plain gRPC client gets HTTP status 400 from
 this address.
 
 ```ts
-import { DWalletGrpcClient } from '@ika.xyz/sdk-core/web';
+import { DWalletGrpcClient } from '@ika.xyz/pre-alpha-core/web';
 
 const grpc = new DWalletGrpcClient('https://solana-alpha-dev-1.ika-network.net');
 ```

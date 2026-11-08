@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 
 /**
- * The Solana `CommitteeChainReader` of `@ika.xyz/sdk-core`: the two reads of
+ * The Solana `CommitteeChainReader` of `@ika.xyz/pre-alpha-core`: the two reads of
  * Solana that the committee the network signed is checked against.
  *
  * - The chain's epoch is the program's `SystemState.epoch`, at byte offset 2 of
@@ -17,7 +17,7 @@
  *
  * The Rust client's `SolanaChain` in ika-solana-sdk makes the same two reads.
  */
-import type { CommitteeChainReader, IkaNetwork } from '@ika.xyz/sdk-core';
+import type { CommitteeChainReader, IkaNetwork } from '@ika.xyz/pre-alpha-core';
 
 import { deriveAddress } from './addresses.js';
 import { solanaNetworkKeyOutputRecordReader } from './network-key-output.js';
@@ -50,7 +50,7 @@ function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
  * until it catches up, or the window ends and the read is refused.
  *
  * `network` is the network the caller chose. On mainnet and testnet a signer
- * is registered only when `@ika.xyz/sdk-core` lists it for the network, and
+ * is registered only when `@ika.xyz/pre-alpha-core` lists it for the network, and
  * every signer is refused while the list is empty, because the new flow is
  * not deployed there yet.
  */

@@ -10,6 +10,7 @@ export * from './dwallet-share-acceptance.js';
 export * from './network-key-id.js';
 export * from './network-key-output.js';
 export * from './read-cross-check.js';
+export * from './refusal-code.js';
 export * from './request-size-limits.js';
 export * from './requests.js';
 export * from './session-identifier.js';

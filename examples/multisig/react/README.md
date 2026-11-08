@@ -6,7 +6,7 @@ approve it. Every approval is a wallet signature, which is what an
 integrator actually ships.
 
 The page uses the SDK as a browser app does: `IkaClient` and
-`IkaTransaction` from `@ika.xyz/sdk-solana/web3`, talking gRPC-Web to the
+`IkaTransaction` from `@ika.xyz/pre-alpha-solana/web3`, talking gRPC-Web to the
 ika network through `fetch` (`src/lib/ika.ts`).
 
 It does not walk every request type. It creates one dWallet and signs one
@@ -17,7 +17,7 @@ message with it.
 The devnet pre-alpha runs on a mock ika network. One backend holds an
 ordinary key for each dWallet and signs with it alone, so the page builds
 its client in mock mode (`withMockCryptography` from
-`@ika.xyz/sdk-core/mock`). Mock mode skips the user's half of the 2PC-MPC
+`@ika.xyz/pre-alpha-core/mock`). Mock mode skips the user's half of the 2PC-MPC
 computation and keeps every other check. Do not put real funds on a
 pre-alpha dWallet. Against the real network, build the client without
 `withMockCryptography`; nothing else on the page changes.
@@ -33,11 +33,11 @@ which is the page's default.
 ```bash
 # Once, from the repository root: the SDK's dependencies, then the SDK.
 pnpm install
-pnpm --filter @ika.xyz/sdk-core build
-pnpm --filter @ika.xyz/sdk-solana build
+pnpm --filter @ika.xyz/pre-alpha-core build
+pnpm --filter @ika.xyz/pre-alpha-solana build
 
 cd examples/multisig/react
-VITE_DWALLET_PROGRAM_ID=CqGtQgrYFUhobuknomFNntwoxCgKGkBRUtemgdPuM9qT \
+VITE_DWALLET_PROGRAM_ID=8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv \
 VITE_MULTISIG_PROGRAM_ID=<your deployed multisig program> \
 pnpm dev
 ```

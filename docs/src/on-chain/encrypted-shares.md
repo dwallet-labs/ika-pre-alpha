@@ -36,7 +36,7 @@ it: an Ed25519 precompile instruction with the holder's signature, followed by
 One key exists per holder and curve, and it never changes. To use another key, a holder
 registers it under another Ed25519 key, which is then another holder.
 
-In TypeScript, `registerEncryptionKeyInstructions` from `@ika.xyz/sdk-solana/instructions` builds
+In TypeScript, `registerEncryptionKeyInstructions` from `@ika.xyz/pre-alpha-solana/instructions` builds
 the two instructions. The SDKs register the key for you when they create a dWallet.
 
 ## Step 2: the network stores the share
@@ -65,7 +65,7 @@ precompile instruction with that signature, followed by `AcceptEncryptedUserShar
 checks that the signature is the holder's, over the stored digest. It then marks the share
 accepted, and moves the dWallet from waiting to Active.
 
-`acceptEncryptedUserShareInstructions` from `@ika.xyz/sdk-solana/instructions` builds the two
+`acceptEncryptedUserShareInstructions` from `@ika.xyz/pre-alpha-solana/instructions` builds the two
 instructions. The SDKs do these checks and the accept for you.
 
 The accept is refused while the coordinator is paused. The network charges no fee for it.

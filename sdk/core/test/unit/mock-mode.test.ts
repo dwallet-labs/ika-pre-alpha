@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 
 /**
- * The SDK's mock mode (`@ika.xyz/sdk-core/mock`, `src/mock.ts`), against a
+ * The SDK's mock mode (`@ika.xyz/pre-alpha-core/mock`, `src/mock.ts`), against a
  * stub of the mock backend.
  *
  * The stub answers the way the backend does: it reads the dWallet's key from

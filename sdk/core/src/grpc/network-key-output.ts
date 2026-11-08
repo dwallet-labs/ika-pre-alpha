@@ -17,7 +17,7 @@
  * `verifyNetworkKeyOutput` checks the served outputs against those records,
  * through a chain-specific reader (`NetworkKeyOutputRecordReader`). The Sui
  * reader is in `@ika.xyz/sdk-sui` and the Solana reader in
- * `@ika.xyz/sdk-solana`.
+ * `@ika.xyz/pre-alpha-solana`.
  *
  * A record's proof is the BCS of `VersionedAttestationProof`: an attestation
  * version, the network key that signed, and its Ed25519 signature over the

@@ -6,7 +6,7 @@
  * account.
  *
  * The check verifies the attestation with the chain-neutral check of
- * `@ika.xyz/sdk-core`, under the network key the caller trusts, and then
+ * `@ika.xyz/pre-alpha-core`, under the network key the caller trusts, and then
  * every value the account stores beside it, the holder's acceptance signature
  * included. A failure is an `AttestationRecordError` of check `record`,
  * naming the stored field.
@@ -26,13 +26,13 @@ import {
 	verifyPartialSignatureVoucherRecord,
 	verifyRegisteredEncryptionKey,
 	verifyStoredEncryptedShare,
-} from '@ika.xyz/sdk-core';
+} from '@ika.xyz/pre-alpha-core';
 import type {
 	AttestationRecord,
 	EncryptedShareAttestation,
 	TrustedNetworkKeys,
 	VerifiedDWalletAttestation,
-} from '@ika.xyz/sdk-core';
+} from '@ika.xyz/pre-alpha-core';
 import { ed25519 } from '@noble/curves/ed25519.js';
 import { keccak_256 } from '@noble/hashes/sha3.js';
 

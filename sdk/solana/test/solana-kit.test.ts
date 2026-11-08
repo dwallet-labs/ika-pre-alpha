@@ -7,8 +7,8 @@
  * it holds, so that `signTransactionMessageWithSigners` signs the whole
  * transaction, the voucher's own signature included.
  */
-import { Curve, fromCurveToNumber, VersionedDWalletDataAttestationBcs } from '@ika.xyz/sdk-core';
-import type { DWallet } from '@ika.xyz/sdk-core/common';
+import { Curve, fromCurveToNumber, VersionedDWalletDataAttestationBcs } from '@ika.xyz/pre-alpha-core';
+import type { DWallet } from '@ika.xyz/pre-alpha-core/common';
 import {
 	address,
 	appendTransactionMessageInstructions,
@@ -94,7 +94,7 @@ function dWallet(): DWallet {
 	} as unknown as DWallet;
 }
 
-describe('@ika.xyz/sdk-solana/kit', () => {
+describe('@ika.xyz/pre-alpha-solana/kit', () => {
 	it('names the same addresses as the web3.js client', () => {
 		const wallet = dWallet();
 		expect(kitClient.programId).toBe(programId.toBase58());

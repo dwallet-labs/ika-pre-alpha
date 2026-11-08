@@ -76,7 +76,7 @@ kind can also decode as another.
 A signature proves only that the key it names made it. The answer names its own signer, so a
 faulty server can sign with a key of its own and name that key. Check the signer against the
 network keys you trust. In TypeScript, use the checks that take your trusted keys, such as
-`verifyAttestation` from `@ika.xyz/sdk-core`. `verifyAttestationSignature` checks only the
+`verifyAttestation` from `@ika.xyz/pre-alpha-core`. `verifyAttestationSignature` checks only the
 signature, under the key the answer names. Use it only after you checked that key yourself.
 
 ## The attestations

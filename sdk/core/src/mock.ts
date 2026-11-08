@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 
 /**
- * `@ika.xyz/sdk-core/mock`: the SDK's mock mode, for a mock ika network such
+ * `@ika.xyz/pre-alpha-core/mock`: the SDK's mock mode, for a mock ika network such
  * as the Solana devnet pre-alpha's.
  *
  * NOT SECURE. A mock network is one backend that holds an ordinary key for
@@ -14,7 +14,7 @@
  * same process too, refuses mock values.
  *
  * ```ts
- * import { withMockCryptography } from '@ika.xyz/sdk-core/mock';
+ * import { withMockCryptography } from '@ika.xyz/pre-alpha-core/mock';
  *
  * const ikaClient = new IkaClient(withMockCryptography({ connection, grpc, config }));
  * ```

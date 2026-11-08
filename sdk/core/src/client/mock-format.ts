@@ -8,7 +8,7 @@
  *
  * This module only names the bytes. The real path imports it to recognize a
  * mock value and refuse it ({@link refuseMockValues}). The mock cryptography
- * that accepts mock values is the separate entry `@ika.xyz/sdk-core/mock`,
+ * that accepts mock values is the separate entry `@ika.xyz/pre-alpha-core/mock`,
  * which the main entry never imports.
  *
  * Every mock value starts with {@link MOCK_MAGIC}, then a kind byte
@@ -65,7 +65,7 @@ export function mockValue(kind: MockKind, payload: ArrayLike<number> = []): Uint
 /** The refusal of a mock value by a client of the real protocol. */
 export const MOCK_VALUE_REFUSED =
 	"a mock value was given to a client of the real protocol: mock values need the SDK's mock " +
-	'feature, a client created with `withMockCryptography` from `@ika.xyz/sdk-core/mock`';
+	'feature, a client created with `withMockCryptography` from `@ika.xyz/pre-alpha-core/mock`';
 
 /** Throw {@link MOCK_VALUE_REFUSED} when any of `values` is a mock value. */
 export function refuseMockValues(...values: ArrayLike<number>[]): void {

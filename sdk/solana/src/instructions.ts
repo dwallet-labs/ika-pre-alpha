@@ -10,7 +10,7 @@
  * a `TransactionInstruction` or it is nothing.
  *
  * That is why this module is a subpath —
- * `@ika.xyz/sdk-solana/instructions` — and not part of the
+ * `@ika.xyz/pre-alpha-solana/instructions` — and not part of the
  * root entry. `@solana/web3.js` is a peer dependency, and importing this
  * subpath is what requires it. A consumer that imports only the root entry
  * needs nothing installed, and `test/root-entry.test.ts` typechecks the
@@ -24,7 +24,7 @@
  * ownership.
  */
 import { Buffer } from 'buffer';
-import { crossCheckedRead } from '@ika.xyz/sdk-core';
+import { crossCheckedRead } from '@ika.xyz/pre-alpha-core';
 import { ed25519 } from '@noble/curves/ed25519.js';
 import {
 	Ed25519Program,
@@ -86,18 +86,26 @@ export function gasDepositAddress(
 export const DEPOSIT_PROOF_DOMAIN = 'ika_protocol::gas::proof_of_possession';
 
 /** The version of the proof of possession, its first two bytes as a little-endian u16. */
-export const DEPOSIT_PROOF_MESSAGE_VERSION = 1;
+export const DEPOSIT_PROOF_MESSAGE_VERSION = 2;
+
+/** The incarnation a first create opens. Each reopen of a closed deposit opens the next one. */
+export const FIRST_GAS_DEPOSIT_INCARNATION = 1n;
 
 /**
- * The bytes a request key signs to prove it consents to a gas deposit whose
- * withdrawals `sender` controls, on the chain numbered `chainNumber`, in the
- * deployment whose network is `network`:
- * - the message version 1 as a little-endian u16;
+ * The bytes a request key signs to prove it consents to the life
+ * `incarnation` of a gas deposit whose withdrawals `sender` controls, on the
+ * chain numbered `chainNumber`, in the deployment whose network is
+ * `network`:
+ * - the message version 2 as a little-endian u16;
  * - `DEPOSIT_PROOF_DOMAIN`;
  * - the chain number as four little-endian bytes;
  * - the network as one byte;
  * - the sender's length, one byte;
- * - the sender's 32 bytes.
+ * - the sender's 32 bytes;
+ * - the incarnation as eight little-endian bytes: 1 for a first create (the
+ *   default), the deposit's incarnation plus one for a reopen. A proof opens
+ *   exactly that life, so the proof of a life that ended never reopens the
+ *   deposit.
  *
  * `chainNumber` and `network` are the ones the coordinator records
  * (`readDWalletCoordinator`); take them from your own configuration. The
@@ -110,9 +118,10 @@ export function depositProofMessage(
 	chainNumber: number,
 	network: number,
 	sender: Uint8Array,
+	incarnation: bigint = FIRST_GAS_DEPOSIT_INCARNATION,
 ): Uint8Array {
 	const domain = new TextEncoder().encode(DEPOSIT_PROOF_DOMAIN);
-	const message = new Uint8Array(2 + domain.length + 4 + 1 + 1 + sender.length);
+	const message = new Uint8Array(2 + domain.length + 4 + 1 + 1 + sender.length + 8);
 	const view = new DataView(message.buffer);
 	view.setUint16(0, DEPOSIT_PROOF_MESSAGE_VERSION, true);
 	let offset = 2;
@@ -124,6 +133,7 @@ export function depositProofMessage(
 	offset += 1;
 	message[offset] = sender.length;
 	message.set(sender, offset + 1);
+	view.setBigUint64(offset + 1 + sender.length, incarnation, true);
 	return message;
 }
 
@@ -133,7 +143,7 @@ export function depositProofMessage(
  * The network charges the key that SIGNED a request rather than the
  * transaction's fee payer, so the deposit pays for `requestKey`'s requests.
  * The `sender` signs the transaction and OWNS the deposit: only the
- * sender's signature requests and claims a withdrawal, and the claim pays
+ * sender's signature requests a withdrawal, and the network's payout sends
  * the SOL to the sender. The request key cannot withdraw. A browser page
  * may hold a request key in memory while the connected wallet opens the
  * deposit; losing the request key loses no funds, because the wallet owns
@@ -174,22 +184,71 @@ export function createDepositInstructions(params: {
 	 * testnet, 3 a local network.
 	 */
 	network: number;
+	/**
+	 * What the deposit is funded with as it is created: IKA (in base units,
+	 * 10^-8 IKA: one IKA is 100,000,000) from `ikaTokenAccount` into the
+	 * coordinator's `treasuryVault`, and SOL from the payer. `solAmount` is
+	 * all the SOL the instruction moves: it includes the coordinator's
+	 * deposit fee, which the program sends to the fee recipient, and the
+	 * deposit is credited the rest. The program refuses a `solAmount` below
+	 * the fee (`BelowDepositFee`), and a creation that leaves the credited
+	 * deposit below the coordinator's minimum first deposit in either coin.
+	 * `IkaTransaction.createFundedGasDeposit` takes the amount to credit and
+	 * adds the fee itself.
+	 * Omitted, the deposit is opened empty, which only a coordinator with no
+	 * minimum accepts. The vault is checked only when IKA moves.
+	 */
+	funding?: {
+		ikaTokenAccount: PublicKey;
+		treasuryVault: PublicKey;
+		ikaAmount: bigint;
+		solAmount: bigint;
+	};
+	/**
+	 * The coordinator's deposit fee recipient (`readDWalletCoordinator`'s
+	 * `depositFee.recipient`): the payer pays it the deposit fee out of
+	 * `funding.solAmount`. Defaults to the payer, which only a coordinator
+	 * with no fee accepts.
+	 */
+	feeRecipient?: PublicKey;
+	/**
+	 * The life the create opens, which the proof of possession names: 1
+	 * (the default) for a request key with no deposit, and the closed
+	 * deposit's incarnation plus one for a reopen. The program refuses a
+	 * proof of any other life.
+	 */
+	incarnation?: bigint;
 }): TransactionInstruction[] {
 	const { programId, sender, requestKey, chainNumber, network } = params;
 	const payer = params.payer ?? sender;
+	const feeRecipient = params.feeRecipient ?? payer;
+	const funding = params.funding ?? {
+		ikaTokenAccount: payer,
+		treasuryVault: payer,
+		ikaAmount: 0n,
+		solAmount: 0n,
+	};
 	const [deposit, bump] = gasDepositAddress(programId, requestKey.publicKey);
 
-	const message = depositProofMessage(chainNumber, network, sender.toBytes());
+	const message = depositProofMessage(
+		chainNumber,
+		network,
+		sender.toBytes(),
+		params.incarnation ?? FIRST_GAS_DEPOSIT_INCARNATION,
+	);
 	const signature =
 		'secretKey' in requestKey
 			? ed25519.sign(message, requestKey.secretKey)
 			: requestKey.proofOfPossession;
 
-	const data = new Uint8Array(98);
+	const data = new Uint8Array(114);
 	data[0] = instructionByte('DWalletCreateDeposit');
 	data.set(requestKey.publicKey, 1);
 	data.set(signature, 33);
 	data[97] = bump;
+	const amounts = new DataView(data.buffer, data.byteOffset, data.byteLength);
+	amounts.setBigUint64(98, funding.ikaAmount, true);
+	amounts.setBigUint64(106, funding.solAmount, true);
 
 	return [
 		Ed25519Program.createInstructionWithPublicKey({
@@ -206,6 +265,12 @@ export function createDepositInstructions(params: {
 				{ pubkey: payer, isSigner: true, isWritable: true },
 				{ pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
 				{ pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
+				{ pubkey: funding.ikaTokenAccount, isSigner: false, isWritable: true },
+				{ pubkey: funding.treasuryVault, isSigner: false, isWritable: true },
+				{ pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+				{ pubkey: eventAuthorityAddress(programId), isSigner: false, isWritable: false },
+				{ pubkey: programId, isSigner: false, isWritable: false },
+				{ pubkey: feeRecipient, isSigner: false, isWritable: true },
 			],
 			data: Buffer.from(data),
 		}),
@@ -219,7 +284,8 @@ export function createDepositInstructions(params: {
  * record whatever the amounts are, so even a top-up of pure SOL has to name
  * the real one. Only a transfer of IKA reads the token account, so a
  * SOL-only top-up may name any account the payer owns and leave it
- * untouched.
+ * untouched. The program refuses a top-up that leaves the deposit's balance
+ * net of debt below the coordinator's minimum first deposit in either coin.
  */
 export function topUpInstruction(params: {
 	programId: PublicKey;
@@ -233,10 +299,24 @@ export function topUpInstruction(params: {
 	 * decimals, so one unit is 10^-8 IKA and one IKA is `100_000_000n`.
 	 */
 	ikaAmount: bigint;
+	/**
+	 * All the SOL the instruction moves, the coordinator's deposit fee
+	 * included: the program sends the fee to the fee recipient and credits
+	 * the rest. So an IKA-only top-up passes exactly the fee here.
+	 * `IkaTransaction.topUpGasDeposit` takes the amount to credit and adds
+	 * the fee itself.
+	 */
 	solAmount: bigint;
+	/**
+	 * The coordinator's deposit fee recipient, which the payer pays the
+	 * deposit fee. Defaults to the payer, which only a coordinator with no
+	 * fee accepts.
+	 */
+	feeRecipient?: PublicKey;
 }): TransactionInstruction {
 	const { programId, deposit, payer, ikaTokenAccount, treasuryVault, ikaAmount, solAmount } =
 		params;
+	const feeRecipient = params.feeRecipient ?? payer;
 
 	const data = new Uint8Array(17);
 	data[0] = instructionByte('DWalletTopUp');
@@ -254,39 +334,44 @@ export function topUpInstruction(params: {
 			{ pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
 			{ pubkey: payer, isSigner: true, isWritable: true },
 			{ pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+			{ pubkey: eventAuthorityAddress(programId), isSigner: false, isWritable: false },
+			{ pubkey: programId, isSigner: false, isWritable: false },
+			{ pubkey: feeRecipient, isSigner: false, isWritable: true },
 		],
 		data: Buffer.from(data),
 	});
 }
 
 /**
- * Request a withdrawal from a gas deposit.
+ * Request the withdrawal of the whole gas deposit.
  *
  * Only the deposit's owner signs it: the wallet that opened the deposit, or
- * the owner a `TransferGasDeposit` named since. The request key cannot. A
- * request replaces any pending one and advances the deposit's withdrawal
- * counter, so a release the network signed for an older request no longer
- * pays. The amounts may not exceed the balances net of debt.
+ * the owner a `TransferGasDeposit` named since. The request key cannot. The
+ * request carries no amount. The network then pays it itself: it takes the
+ * withdrawal's charge first, then sends everything left after debt and the
+ * charge, the SOL to the owner and the IKA to `ikaDestination`. There is no
+ * claim step. A request is final: there is no cancel, and a second request
+ * while one is pending is refused. A payout that pays everything closes the
+ * deposit, and an owner who wants to keep spending reopens it with a create.
  */
 export function requestWithdrawInstruction(params: {
 	programId: PublicKey;
-	/** The deposit's owner, which has to sign. */
+	/** The deposit's owner, which has to sign. It receives the SOL. */
 	owner: PublicKey;
 	deposit: PublicKey;
+	/** An open token account of the IKA mint, which receives the IKA. */
+	ikaDestination: PublicKey;
 	/**
-	 * IKA in the base units of the Solana IKA mint. The mint has eight
-	 * decimals, so one unit is 10^-8 IKA and one IKA is `100_000_000n`.
+	 * The deposit's life the request is for. The program refuses another one
+	 * (`GasDepositIncarnationMismatch`) and a closed deposit (`DepositClosed`).
 	 */
-	ikaAmount: bigint;
-	solAmount: bigint;
+	incarnation: bigint;
 }): TransactionInstruction {
-	const { programId, owner, deposit, ikaAmount, solAmount } = params;
+	const { programId, owner, deposit, ikaDestination, incarnation } = params;
 
-	const data = new Uint8Array(17);
+	const data = new Uint8Array(9);
 	data[0] = instructionByte('DWalletRequestWithdraw');
-	const amounts = new DataView(data.buffer, data.byteOffset, data.byteLength);
-	amounts.setBigUint64(1, ikaAmount, true);
-	amounts.setBigUint64(9, solAmount, true);
+	new DataView(data.buffer).setBigUint64(1, incarnation, true);
 
 	return new TransactionInstruction({
 		programId,
@@ -294,130 +379,22 @@ export function requestWithdrawInstruction(params: {
 			{ pubkey: owner, isSigner: true, isWritable: false },
 			{ pubkey: deposit, isSigner: false, isWritable: true },
 			{ pubkey: coordinatorAddress(programId), isSigner: false, isWritable: false },
+			{ pubkey: ikaDestination, isSigner: false, isWritable: false },
+			{ pubkey: eventAuthorityAddress(programId), isSigner: false, isWritable: false },
+			{ pubkey: programId, isSigner: false, isWritable: false },
 		],
 		data: Buffer.from(data),
 	});
 }
 
-/** The first bytes of every Solana gas release the network signs. */
-const GAS_RELEASE_PREFIX = new Uint8Array([
-	0xff,
-	...new TextEncoder().encode('solana-gas-release'),
-]);
-
-/**
- * The 139 bytes the network signs to release a requested withdrawal, the
- * bytes the program rebuilds: `0xFF || "solana-gas-release" ||
- * program id || deposit || request key || withdrawal counter (u64 LE) || IKA
- * amount (u64 LE) || SOL amount (u64 LE)`.
- */
-export function gasReleaseMessage(params: {
-	programId: PublicKey;
-	deposit: PublicKey;
-	requestPublicKey: Uint8Array;
-	withdrawalSequence: bigint;
-	ikaAmount: bigint;
-	solAmount: bigint;
-}): Uint8Array {
-	const message = new Uint8Array(GAS_RELEASE_PREFIX.length + 32 * 3 + 8 * 3);
-	message.set(GAS_RELEASE_PREFIX, 0);
-	let offset = GAS_RELEASE_PREFIX.length;
-	message.set(params.programId.toBytes(), offset);
-	offset += 32;
-	message.set(params.deposit.toBytes(), offset);
-	offset += 32;
-	message.set(params.requestPublicKey, offset);
-	offset += 32;
-	const view = new DataView(message.buffer);
-	view.setBigUint64(offset, params.withdrawalSequence, true);
-	view.setBigUint64(offset + 8, params.ikaAmount, true);
-	view.setBigUint64(offset + 16, params.solAmount, true);
-	return message;
-}
-
-/**
- * The two instructions that claim a requested withdrawal: the Ed25519
- * precompile of the network's release, then `Withdraw`.
- *
- * Only the deposit's owner signs the claim. The SOL goes to the owner and
- * the IKA to `ikaTokenAccount`, a token account the owner names. The release
- * is the network key's signature over `gasReleaseMessage` for the pending
- * request; the program reads it back from the instruction just before the
- * claim, so the two go into one transaction in this order. A program that
- * owns a deposit and claims by CPI puts the precompile just before its own
- * instruction instead.
- */
-export function withdrawInstructions(params: {
-	programId: PublicKey;
-	/** The deposit's owner, which has to sign. It receives the SOL. */
-	owner: PublicKey;
-	deposit: PublicKey;
-	/** The request key the deposit pays for; the release names it. */
-	requestPublicKey: Uint8Array;
-	/** Receives the IKA. */
-	ikaTokenAccount: PublicKey;
-	/** The coordinator's treasury vault. */
-	treasuryVault: PublicKey;
-	/** The network key's public key, which signed the release. */
-	networkPublicKey: Uint8Array;
-	release: {
-		withdrawalSequence: bigint;
-		ikaAmount: bigint;
-		solAmount: bigint;
-		signature: Uint8Array;
-	};
-}): TransactionInstruction[] {
-	const { programId, owner, deposit, requestPublicKey, release } = params;
-	const message = gasReleaseMessage({
-		programId,
-		deposit,
-		requestPublicKey,
-		withdrawalSequence: release.withdrawalSequence,
-		ikaAmount: release.ikaAmount,
-		solAmount: release.solAmount,
-	});
-
-	const data = new Uint8Array(73);
-	data[0] = instructionByte('DWalletWithdraw');
-	new DataView(data.buffer).setBigUint64(1, release.withdrawalSequence, true);
-	data.set(release.signature, 9);
-
-	const vaultAuthority = new PublicKey(
-		findProgramAddress([new TextEncoder().encode('vault_authority')], programId.toBytes()).address,
-	);
-	const networkKey = new PublicKey(
-		networkEncryptionKeyPda(programId.toBytes(), params.networkPublicKey).address,
-	);
-	return [
-		Ed25519Program.createInstructionWithPublicKey({
-			publicKey: params.networkPublicKey,
-			message,
-			signature: release.signature,
-		}),
-		new TransactionInstruction({
-			programId,
-			keys: [
-				{ pubkey: owner, isSigner: true, isWritable: true },
-				{ pubkey: deposit, isSigner: false, isWritable: true },
-				{ pubkey: coordinatorAddress(programId), isSigner: false, isWritable: false },
-				{ pubkey: params.ikaTokenAccount, isSigner: false, isWritable: true },
-				{ pubkey: params.treasuryVault, isSigner: false, isWritable: true },
-				{ pubkey: vaultAuthority, isSigner: false, isWritable: false },
-				{ pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-				{ pubkey: networkKey, isSigner: false, isWritable: false },
-				{ pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
-			],
-			data: Buffer.from(data),
-		}),
-	];
-}
-
 /**
  * Hand a gas deposit to a new owner.
  *
- * The current owner signs and names the new owner, who alone requests and
- * claims the deposit's withdrawals from then on. The request key the
- * deposit pays for does not change.
+ * The current owner signs and names the new owner, who alone requests the
+ * deposit's withdrawals from then on. The request key the deposit pays for
+ * does not change. The program refuses a transfer while a withdrawal request
+ * is pending (`TransferWhileWithdrawalPending`): a request is final, and only
+ * the network's payout ends it.
  */
 export function transferGasDepositInstruction(params: {
 	programId: PublicKey;
@@ -425,12 +402,15 @@ export function transferGasDepositInstruction(params: {
 	owner: PublicKey;
 	deposit: PublicKey;
 	newOwner: PublicKey;
+	/** The deposit's life the transfer is for, as for a request. */
+	incarnation: bigint;
 }): TransactionInstruction {
-	const { programId, owner, deposit, newOwner } = params;
+	const { programId, owner, deposit, newOwner, incarnation } = params;
 
-	const data = new Uint8Array(33);
+	const data = new Uint8Array(41);
 	data[0] = instructionByte('DWalletTransferGasDeposit');
 	data.set(newOwner.toBytes(), 1);
+	new DataView(data.buffer).setBigUint64(33, incarnation, true);
 
 	return new TransactionInstruction({
 		programId,

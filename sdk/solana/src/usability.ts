@@ -5,7 +5,7 @@
  * The ownership check an approval needs, and the reader it runs on.
  *
  * The SDK signs for a dWallet only when the user's own key holds its share
- * (`assertDWalletUsable` in `@ika.xyz/sdk-core`). Someone can create a dWallet
+ * (`assertDWalletUsable` in `@ika.xyz/pre-alpha-core`). Someone can create a dWallet
  * for your address whose share only their key holds, so an approval builder
  * takes the check's result, or a function that runs the check, and refuses
  * without one. The result's type is declared here by its shape.
@@ -19,14 +19,14 @@ import {
 	copyTrustedNetworkKeys,
 	verifyDWalletAttestationRecord,
 	verifyStoredDWallet,
-} from '@ika.xyz/sdk-core';
+} from '@ika.xyz/pre-alpha-core';
 import type {
 	AttestationRecord,
 	CheckedDWalletRecord,
 	DWalletLookup,
 	DWalletShareReader,
 	TrustedNetworkKeys,
-} from '@ika.xyz/sdk-core';
+} from '@ika.xyz/pre-alpha-core';
 
 import {
 	readDWallet,
@@ -159,7 +159,7 @@ export type SolanaDWalletAccountInput = Pick<
 export interface SolanaDWalletAccountReadsUnverified {
 	/**
 	 * The network keys the caller trusts (`trustedNetworkKeys` of
-	 * `@ika.xyz/sdk-core`), never one a record states about itself: on mainnet
+	 * `@ika.xyz/pre-alpha-core`), never one a record states about itself: on mainnet
 	 * and testnet the keys the SDK lists, elsewhere the caller's own. A
 	 * record's signer, and the key that holds the dWallet's network share,
 	 * must each be one of them.
@@ -224,7 +224,7 @@ export interface SolanaDWalletAccountReadsUnverified {
 
 /**
  * The reader for the core's ownership check (`assertDWalletUsable` and
- * `signReEncryptedShareAcceptance` in `@ika.xyz/sdk-core`), over `reads`.
+ * `signReEncryptedShareAcceptance` in `@ika.xyz/pre-alpha-core`), over `reads`.
  * Every account it returns is checked first: the dWallet's attestation with
  * the core's `verifyDWalletAttestationRecord`, the dWallet account's network
  * key, which must be one of the trusted keys, the dWallet account's curve,
@@ -367,7 +367,7 @@ export function checkedSolanaShareReader(
  * `Connection.getAccountInfo`). Every account read must be owned by
  * `programId`, and must read as its type; otherwise the read rejects.
  * `trustedNetworkKeys` are the network keys the caller trusts, built with
- * `trustedNetworkKeys` of `@ika.xyz/sdk-core`: on mainnet and testnet the
+ * `trustedNetworkKeys` of `@ika.xyz/pre-alpha-core`: on mainnet and testnet the
  * network keys the SDK lists, and nothing else; on a custom network the keys
  * the caller passes, never keys read from the RPC that serves the accounts.
  * A dWallet made under an earlier network key has records a newer key

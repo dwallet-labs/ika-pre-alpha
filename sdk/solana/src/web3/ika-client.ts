@@ -11,8 +11,8 @@
  * second endpoint, run by another provider, to have each one checked
  * against it.
  */
-import type { IkaNetwork } from '@ika.xyz/sdk-core';
-import type { IkaClientBaseOptions } from '@ika.xyz/sdk-core/common';
+import type { IkaNetwork } from '@ika.xyz/pre-alpha-core';
+import type { IkaClientBaseOptions } from '@ika.xyz/pre-alpha-core/common';
 import { PublicKey } from '@solana/web3.js';
 import type { Connection } from '@solana/web3.js';
 

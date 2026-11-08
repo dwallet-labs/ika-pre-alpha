@@ -94,7 +94,7 @@ cargo test -p ika-example-voting-anchor
 
 # TypeScript E2E, against the devnet pre-alpha (see the E2E Demo page)
 cd examples && bun install
-PAYER_KEYPAIR=<your-keypair.json> bun voting/e2e/main.ts CqGtQgrYFUhobuknomFNntwoxCgKGkBRUtemgdPuM9qT <VOTING_ID>
+PAYER_KEYPAIR=<your-keypair.json> bun voting/e2e/main.ts 8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv <VOTING_ID>
 ```
 
 ## Source Files

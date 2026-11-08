@@ -22,7 +22,7 @@ export {
 	stopWasmWorker,
 	UserShareEncryptionKeys,
 	useWasmWorker,
-} from '@ika.xyz/sdk-core/common';
+} from '@ika.xyz/pre-alpha-core/common';
 export type {
 	CreatedDWallet,
 	DecodedRequest,
@@ -40,9 +40,9 @@ export type {
 	SignDuringDKGRequest,
 	WaitOptions,
 	WasmWorker,
-} from '@ika.xyz/sdk-core/common';
+} from '@ika.xyz/pre-alpha-core/common';
 /** The client of the validators' gRPC: the Node client in Node, and the gRPC-Web client in a browser. */
-export { DWalletGrpcClient } from '@ika.xyz/sdk-core/auto';
+export { DWalletGrpcClient } from '@ika.xyz/pre-alpha-core/auto';
 export { IkaClient } from './ika-client.js';
 export type { IkaClientOptions, IkaConfig } from './ika-client.js';
 export { IkaTransaction, TransactionTooLargeError } from './ika-transaction.js';

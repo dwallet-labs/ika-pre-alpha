@@ -3,13 +3,13 @@
 
 /**
  * The Solana reads that find a request's session once its epoch closed
- * before an answer (`RequestRecordReader` in `@ika.xyz/sdk-core/common`).
+ * before an answer (`RequestRecordReader` in `@ika.xyz/pre-alpha-core/common`).
  *
  * Every read goes through `getAccount`, cross-checked against the second
  * endpoint when one is set: an endpoint that hid a record would make the SDK
  * send a request again that already ran.
  */
-import type { RequestRecordReader } from '@ika.xyz/sdk-core/common';
+import type { RequestRecordReader } from '@ika.xyz/pre-alpha-core/common';
 
 import {
 	FUTURE_SIGNATURE_VOUCHER_SETTLED_WITHOUT_DELIVERY,

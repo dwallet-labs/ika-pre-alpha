@@ -26,13 +26,13 @@ import {
 	listedNetworkKey,
 	listedNetworkKeyRecordReader,
 	verifyNetworkKeyOutput,
-} from '@ika.xyz/sdk-core';
+} from '@ika.xyz/pre-alpha-core';
 import type {
 	IkaNetwork,
 	NetworkKeyOutput,
 	NetworkKeyOutputRecord,
 	NetworkKeyOutputRecordReader,
-} from '@ika.xyz/sdk-core';
+} from '@ika.xyz/pre-alpha-core';
 
 import { readNetworkEncryptionKey, readNetworkReconfigurationOutput } from './accounts.js';
 import { networkEncryptionKeyPda, networkReconfigurationOutputPda } from './addresses.js';
@@ -63,7 +63,7 @@ function storedProof(proof: Uint8Array | null): Uint8Array {
  * configuration, never from a served answer.
  *
  * `network` is the network the caller chose. On mainnet and testnet every
- * read is checked against the network keys `@ika.xyz/sdk-core` lists
+ * read is checked against the network keys `@ika.xyz/pre-alpha-core` lists
  * (`listedNetworkKeyRecordReader`): a key it does not list is refused, and is
  * not a registered signer; a key's account must be at the address the list
  * names and hold the DKG digest the list names. While the list is empty, the
@@ -206,7 +206,7 @@ function chainNetworkKeyOutputRecordReader(
 	};
 }
 
-/** Where the network key's outputs are served from: `DWalletGrpcClient` of `@ika.xyz/sdk-core/client`. */
+/** Where the network key's outputs are served from: `DWalletGrpcClient` of `@ika.xyz/pre-alpha-core/client`. */
 export interface NetworkKeyOutputSource {
 	getNetworkKeyOutput(networkKeyIdentifier: Uint8Array): Promise<NetworkKeyOutput>;
 }
@@ -214,7 +214,7 @@ export interface NetworkKeyOutputSource {
 /**
  * Read the network key `networkKeyId`'s public outputs from the validators,
  * and check them against the records the program keeps on Solana
- * (`verifyNetworkKeyOutput` of `@ika.xyz/sdk-core`): the DKG digest, the
+ * (`verifyNetworkKeyOutput` of `@ika.xyz/pre-alpha-core`): the DKG digest, the
  * reshare digest of the epoch the validator serves, and each record's proof,
  * which must be signed by a network key registered on Solana. A record whose
  * proof is still empty is read again until the check's wait ends, and then
@@ -222,7 +222,7 @@ export interface NetworkKeyOutputSource {
  *
  * `networkKeyId` is the key's public key, the key the caller trusts, and
  * `network` the network the caller chose. On mainnet and testnet it rejects,
- * before any read, a key that `@ika.xyz/sdk-core` does not list for the
+ * before any read, a key that `@ika.xyz/pre-alpha-core` does not list for the
  * network, and every key while the list is empty, because the new flow is not
  * deployed there yet. The accounts are then checked against the list
  * (`solanaNetworkKeyOutputRecordReader`, which cross-checks the signer's

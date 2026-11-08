@@ -19,7 +19,6 @@ const tables = {
 		"DWalletCreateDeposit": 136,
 		"DWalletTopUp": 137,
 		"DWalletRequestWithdraw": 141,
-		"DWalletWithdraw": 142,
 		"DWalletPauseSigningParameter": 151,
 		"DWalletUnpauseSigningParameter": 152,
 		"DWalletRegisterEncryptionKey": 153,
@@ -40,7 +39,7 @@ const tables = {
 		"DWalletCoordinator": {
 			"discriminator": 96,
 			"version": 1,
-			"data_len": 631
+			"data_len": 727
 		},
 		"DWallet": {
 			"discriminator": 97,
@@ -55,7 +54,7 @@ const tables = {
 		"GasDeposit": {
 			"discriminator": 99,
 			"version": 1,
-			"data_len": 179
+			"data_len": 205
 		},
 		"EncryptedUserSecretKeyShare": {
 			"discriminator": 101,
@@ -96,9 +95,57 @@ const tables = {
 			"data_len": 1941
 		}
 	},
+	"events": {
+		"instruction_tag_le": [
+			228,
+			69,
+			165,
+			46,
+			81,
+			203,
+			154,
+			29
+		],
+		"event_authority_seed": "__event_authority",
+		"discriminators": {
+			"DKGRequested": 96,
+			"DKGComplete": 98,
+			"DKGRejected": 99,
+			"SignComplete": 101,
+			"GasDeposited": 106,
+			"GasWithdrawn": 107,
+			"GasSettled": 108,
+			"NetworkDKGRequested": 109,
+			"NetworkKeyRegistered": 110,
+			"SigningParameterPaused": 111,
+			"SigningParameterUnpaused": 112,
+			"DWalletCommitted": 113,
+			"EncryptedShareCommitted": 114,
+			"PublicShareCommitted": 115,
+			"DWalletPauserSet": 116,
+			"NetworkKeyReconfigurationCommitted": 117,
+			"EncryptionKeyRegistered": 118,
+			"NetworkKeyDkgSigned": 119,
+			"EpochAdvanced": 120,
+			"ChainIdentifierStaged": 121,
+			"ChainIdentifierApplied": 122,
+			"EncryptedShareAccepted": 123,
+			"GasChargedWithoutDelivery": 124,
+			"DWalletActivated": 125,
+			"GasDepositTransferred": 126,
+			"GasDepositCreated": 127,
+			"GasWithdrawalRequested": 128,
+			"WithdrawalShortOfCharge": 129,
+			"MinFirstDepositSet": 130,
+			"MinBalanceSet": 131,
+			"WithdrawalNotPaid": 132,
+			"GasChargeSkipped": 133,
+			"DepositFeeSet": 134
+		}
+	},
 	"seed_schemas": {
 		"SystemState": {
-			"owner": "system",
+			"owner": "staking",
 			"components": [
 				{
 					"name": "prefix",

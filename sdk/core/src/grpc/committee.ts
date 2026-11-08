@@ -23,7 +23,7 @@
  *
  * The chain's half of the check is a `CommitteeChainReader`:
  * `createSuiCommitteeReader` of `@ika.xyz/sdk-sui` reads the `ika_protocol`
- * coordinator's epoch, and `solanaCommitteeReader` of `@ika.xyz/sdk-solana`
+ * coordinator's epoch, and `solanaCommitteeReader` of `@ika.xyz/pre-alpha-solana`
  * reads the program's `SystemState.epoch`.
  *
  * The bytes and the rules are those of the node and of the Rust client

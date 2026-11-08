@@ -23,7 +23,7 @@
  * payer of its own, as `TransactionSigner`s to have theirs attached too, or
  * as `Address`es to sign for them another way.
  *
- * The instructions are built by `@ika.xyz/sdk-solana`, as `@solana/web3.js`
+ * The instructions are built by `@ika.xyz/pre-alpha-solana`, as `@solana/web3.js`
  * instructions, and converted. So `@solana/web3.js` must be installed, though
  * the app's code never sees it. As with the web3.js `IkaTransaction`, each
  * method measures the whole transaction against Solana's 1,232 bytes, with
@@ -32,8 +32,8 @@
  * `add`, so they are measured too.
  */
 import { Buffer } from 'buffer';
-import type { Curve } from '@ika.xyz/sdk-core';
-import type { DWallet, UserShareEncryptionKeys } from '@ika.xyz/sdk-core/common';
+import type { Curve } from '@ika.xyz/pre-alpha-core';
+import type { DWallet, UserShareEncryptionKeys } from '@ika.xyz/pre-alpha-core/common';
 import { AccountRole, address, createKeyPairSignerFromBytes, getAddressEncoder } from '@solana/kit';
 import type {
 	AccountMeta,
@@ -131,6 +131,43 @@ export class IkaTransaction {
 		consent: Uint8Array;
 	}): IkaTransaction {
 		this.#inner.createGasDeposit(consented);
+		return this;
+	}
+
+	/** As the web3.js `IkaTransaction.createFundedGasDeposit`, from the payer's token account `ikaTokenAccount`. */
+	async createFundedGasDeposit(params: {
+		ikaTokenAccount: Address;
+		ikaAmount: bigint;
+		solAmount: bigint;
+		consented?: { requestPublicKey: Uint8Array; consent: Uint8Array };
+	}): Promise<IkaTransaction> {
+		await this.#inner.createFundedGasDeposit({
+			...params,
+			ikaTokenAccount: publicKey(params.ikaTokenAccount),
+		});
+		return this;
+	}
+
+	/** As the web3.js `IkaTransaction.requestGasWithdrawal`. */
+	async requestGasWithdrawal(params: {
+		ikaDestination: Address;
+		incarnation?: bigint;
+		requestPublicKey?: Uint8Array;
+	}): Promise<IkaTransaction> {
+		await this.#inner.requestGasWithdrawal({
+			...params,
+			ikaDestination: publicKey(params.ikaDestination),
+		});
+		return this;
+	}
+
+	/** As the web3.js `IkaTransaction.transferGasDeposit`. */
+	async transferGasDeposit(params: {
+		newOwner: Address;
+		incarnation?: bigint;
+		requestPublicKey?: Uint8Array;
+	}): Promise<IkaTransaction> {
+		await this.#inner.transferGasDeposit({ ...params, newOwner: publicKey(params.newOwner) });
 		return this;
 	}
 
@@ -236,6 +273,7 @@ function web3Client(ikaClient: IkaClient): IkaTransactionClient {
 		chainNumber: ikaClient.chainNumber,
 		networkValue: ikaClient.networkValue,
 		getDWalletCoordinator: () => ikaClient.getDWalletCoordinator(),
+		getGasDeposit: (requestPublicKey) => ikaClient.getGasDeposit(requestPublicKey),
 		getRequestPublicKey: (keys) => ikaClient.getRequestPublicKey(keys),
 		checkDWalletUsable: (dWallet, keys) => ikaClient.checkDWalletUsable(dWallet, keys),
 		getDWalletAddress: (dWallet) => publicKey(ikaClient.getDWalletAddress(dWallet)),

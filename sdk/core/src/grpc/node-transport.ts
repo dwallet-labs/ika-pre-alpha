@@ -20,6 +20,7 @@ import {
 } from './committee.js';
 import {
 	decodeCommitteeAnswer,
+	decodeRefusalDetails,
 	decodeRequest,
 	DWALLET_SERVICE_METHOD_NAMES,
 	DWALLET_SERVICE_NAME,
@@ -34,6 +35,7 @@ import {
 	pinNetworkKeyCertificate,
 	UnexpectedNetworkKeyError,
 } from './network-key-tls.js';
+import { markRefusalCode } from './refusal-code.js';
 import type { DWalletTransport, UnaryAnswer } from './transport.js';
 import {
 	beforeDeadline,
@@ -468,6 +470,20 @@ export function serviceDefinitionForTestsOnly(): grpc.ServiceDefinition {
 	);
 }
 
+/**
+ * Keep on `error`, the error of a gRPC status, the refusal code its
+ * `grpc-status-details-bin` trailer carries. grpc-js leaves that trailer in
+ * the error's `metadata`. A status with no details keeps no code.
+ */
+function keepStatusRefusalCode(error: Error): Error {
+	const metadata = (error as { metadata?: grpc.Metadata }).metadata;
+	const details = metadata?.get?.('grpc-status-details-bin')[0];
+	if (details instanceof Uint8Array) {
+		markRefusalCode(error, decodeRefusalDetails(details));
+	}
+	return error;
+}
+
 /** Response headers as strings. A binary header is given in base64. */
 function headersOf(metadata: grpc.Metadata): Record<string, string> {
 	return Object.fromEntries(
@@ -661,7 +677,7 @@ export class NodeTransport implements DWalletTransport {
 				{ deadline: new Date(callDeadline) },
 				(err: Error | null, response: Uint8Array) =>
 					err
-						? reject(this.renewAfterConnectionFailure(service, err))
+						? reject(this.renewAfterConnectionFailure(service, keepStatusRefusalCode(err)))
 						: resolve({ response, headers }),
 			);
 			call.on('metadata', (metadata: grpc.Metadata) => {

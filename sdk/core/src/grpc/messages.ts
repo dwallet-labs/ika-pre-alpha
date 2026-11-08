@@ -30,6 +30,30 @@ message UserSignedRequest {
 }
 message TransactionResponse {
   bytes response_data = 1;
+  RefusalCode refusal_code = 2;
+}
+enum RefusalCode {
+  REFUSAL_CODE_UNSPECIFIED = 0;
+  REFUSAL_CODE_EPOCH_CLOSING = 1;
+  REFUSAL_CODE_GAS_WAIT_ENDED_WITH_THE_EPOCH = 2;
+  REFUSAL_CODE_GAS_DEPOSIT_SNAPSHOT_STALE = 3;
+  REFUSAL_CODE_GAS_WAIT_FULL = 4;
+  REFUSAL_CODE_GAS_WAIT_FULL_FOR_KEY = 5;
+  REFUSAL_CODE_NO_GAS_DEPOSIT = 6;
+  REFUSAL_CODE_GAS_DEPOSIT_SHORT = 7;
+  REFUSAL_CODE_GAS_DEPOSIT_BELOW_MIN_BALANCE = 8;
+  REFUSAL_CODE_GAS_DEPOSIT_WITHDRAWAL_PENDING = 9;
+  REFUSAL_CODE_GAS_DEPOSIT_CLOSED = 10;
+  REFUSAL_CODE_GAS_DEPOSIT_PAID_OUT_THIS_EPOCH = 11;
+  REFUSAL_CODE_PRESIGN_POOL_EMPTY = 12;
+  REFUSAL_CODE_REQUEST_EPOCH_MISMATCH = 13;
+  REFUSAL_CODE_REQUEST_EPOCH_NOT_ENTERED_YET = 14;
+  REFUSAL_CODE_TOO_MANY_PENDING_PRECHECKS = 15;
+  REFUSAL_CODE_TOO_MANY_CHAIN_READS = 16;
+  REFUSAL_CODE_DOES_NOT_READ_SOLANA = 17;
+}
+message RefusalDetails {
+  RefusalCode refusal_code = 1;
 }
 message GetPresignsRequest {
   bytes user_pubkey = 1;
@@ -86,10 +110,11 @@ export const DWALLET_SERVICE_NAME = 'ika.dwallet.v1alpha1.DWalletService';
  * a fixed name in the shared temporary directory, where another user could
  * replace it with a link, or with another definition, before it was read.
  */
-const service = protobuf
-	.parse(PROTO, { keepCase: true })
-	.root.resolveAll()
-	.lookupService(DWALLET_SERVICE_NAME);
+const root = protobuf.parse(PROTO, { keepCase: true }).root.resolveAll();
+const service = root.lookupService(DWALLET_SERVICE_NAME);
+
+/** The message a gRPC status's details hold when the status is a coded refusal. */
+const refusalDetailsType = root.lookupType('ika.dwallet.v1alpha1.RefusalDetails');
 
 /**
  * How a decoded message becomes a plain object: 64-bit numbers as decimal
@@ -138,6 +163,25 @@ export function decodeRequest(method: string, bytes: Uint8Array): any {
 /** Encode the answer of `method`, as a server does. */
 export function encodeResponse(method: string, response: object): Uint8Array {
 	return encode(methodOf(method).resolvedResponseType!, response);
+}
+
+/**
+ * The refusal code in a gRPC status's details, the bytes of its
+ * `grpc-status-details-bin` trailer, which hold a `RefusalDetails` message.
+ * Details that do not decode carry no code, so they give
+ * `REFUSAL_CODE_UNSPECIFIED`, 0, and the client reads the status's message.
+ */
+export function decodeRefusalDetails(bytes: Uint8Array): number {
+	try {
+		return decode(refusalDetailsType, bytes).refusal_code ?? 0;
+	} catch {
+		return 0;
+	}
+}
+
+/** Encode a `RefusalDetails` message with `refusalCode`, as a server does. */
+export function encodeRefusalDetails(refusalCode: number): Uint8Array {
+	return encode(refusalDetailsType, { refusal_code: refusalCode });
 }
 
 /**

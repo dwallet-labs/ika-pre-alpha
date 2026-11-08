@@ -6,8 +6,8 @@
  * before an answer, from the chain alone: it waits for the epoch at which
  * the request's epoch is settled, then looks for the session.
  */
-import { gasChargeId } from '@ika.xyz/sdk-core/common';
-import type { PendingRequest, RequestRecordReader } from '@ika.xyz/sdk-core/common';
+import { gasChargeId } from '@ika.xyz/pre-alpha-core/common';
+import type { PendingRequest, RequestRecordReader } from '@ika.xyz/pre-alpha-core/common';
 import { Connection, Keypair } from '@solana/web3.js';
 import { describe, expect, it } from 'vitest';
 

@@ -65,6 +65,7 @@ import {
 import type { DWalletCurveBcs, DWalletSignatureAlgorithmBcs } from './bcs.js';
 import type { IkaNetwork, TrustedNetworkKeys } from './deployed-networks.js';
 import type { SentSignDuringDkg } from './dwallet-share-acceptance.js';
+import { markRefusalCode, refusalCodeOf } from './refusal-code.js';
 import { futureSignMessageDigests } from './requests.js';
 import type {
 	DWalletSignatureSchemeInput,
@@ -114,7 +115,10 @@ function attestationOfAnswer(
 	expectedNetworkKeyId: ArrayLike<number>,
 ): HeldAttestation {
 	if (response.$kind === 'Error') {
-		throw new Error(`the network refused the request: ${response.Error.message}`);
+		// The error keeps the answer's refusal code, so a caller can act on it.
+		const refused = new Error(`the network refused the request: ${response.Error.message}`);
+		markRefusalCode(refused, refusalCodeOf(response));
+		throw refused;
 	}
 	if (response.$kind !== 'Attestation') {
 		throw new Error('a request that changes state was answered with a signature');

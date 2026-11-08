@@ -16,7 +16,7 @@
  * a chain transaction that carries its Ed25519 signature over the digest the
  * share record stores. The chain clients build that transaction:
  * `acceptEncryptedUserShareTx` in `@ika.xyz/sdk-sui` and
- * `acceptEncryptedUserShareInstructions` in `@ika.xyz/sdk-solana`. Anyone may
+ * `acceptEncryptedUserShareInstructions` in `@ika.xyz/pre-alpha-solana`. Anyone may
  * send it and pay for it: the holder's signature is the only authority.
  *
  * The holder must not sign an attestation it has not checked. Each function

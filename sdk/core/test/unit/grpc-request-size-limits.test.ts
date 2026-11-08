@@ -37,6 +37,7 @@ function sign(lengths: {
 		epoch: 1n,
 		chain_id: { Sui: null },
 		network: 3,
+		deposit_incarnation: 1n,
 		intended_chain_sender: new Uint8Array(32),
 		request: {
 			Sign: {
@@ -117,6 +118,7 @@ function dkgWithASign(messageLength: number) {
 		epoch: 1n,
 		chain_id: { Sui: null },
 		network: 3,
+		deposit_incarnation: 1n,
 		intended_chain_sender: new Uint8Array(32),
 		request: {
 			Dkg: {

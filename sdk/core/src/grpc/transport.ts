@@ -11,6 +11,8 @@
  * transport (`./node-transport.ts`) does that over grpc-js.
  */
 
+import { isRefusal, RefusalCode } from './refusal-code.js';
+
 /** The gRPC status codes the client's rules read. */
 export const GrpcStatus = {
 	DEADLINE_EXCEEDED: 4,
@@ -73,14 +75,20 @@ export const GAS_WAIT_ENDED_WITH_THE_EPOCH =
 
 /**
  * Whether `error`, thrown by a gRPC call, is one of the validator's
- * epoch-closing refusals: `EPOCH_CLOSING_REFUSAL` or
- * `GAS_WAIT_ENDED_WITH_THE_EPOCH`, with the status `UNAVAILABLE`.
+ * epoch-closing refusals, with the status `UNAVAILABLE`. The status's refusal
+ * code decides: `EPOCH_CLOSING` or `GAS_WAIT_ENDED_WITH_THE_EPOCH`. A status
+ * with no code is read by its sentence: `EPOCH_CLOSING_REFUSAL` or
+ * `GAS_WAIT_ENDED_WITH_THE_EPOCH`.
  */
 export function isEpochClosingRefusal(error: unknown): boolean {
 	const { code, details } = (error ?? {}) as { code?: number; details?: string };
 	return (
 		code === GrpcStatus.UNAVAILABLE &&
-		(details === EPOCH_CLOSING_REFUSAL || details === GAS_WAIT_ENDED_WITH_THE_EPOCH)
+		isRefusal(
+			error,
+			[RefusalCode.EPOCH_CLOSING, RefusalCode.GAS_WAIT_ENDED_WITH_THE_EPOCH],
+			() => details === EPOCH_CLOSING_REFUSAL || details === GAS_WAIT_ENDED_WITH_THE_EPOCH,
+		)
 	);
 }
 

@@ -1,8 +1,8 @@
 {
-	"name": "@ika.xyz/ika-wasm",
+	"name": "@ika.xyz/pre-alpha-wasm",
 	"description": "The user's half of the ika dWallet protocol, compiled to WebAssembly.",
 	"author": "dWallet Labs, Ltd. <dev@dwalletlabs.com>",
-	"version": "0.4.0-pre-alpha.0",
+	"version": "0.1.0",
 	"license": "BSD-3-Clause-Clear",
 	"types": "./dist/web/dwallet_mpc_wasm.d.ts",
 	"exports": {
@@ -27,8 +27,7 @@
 		"dist/**"
 	],
 	"publishConfig": {
-		"access": "public",
-		"tag": "pre-alpha"
+		"access": "public"
 	},
 	"repository": {
 		"type": "git",

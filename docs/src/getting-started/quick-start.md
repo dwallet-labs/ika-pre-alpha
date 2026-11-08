@@ -16,8 +16,8 @@ The client needs two connections: one to Solana, to send transactions and read a
 the ika network, to send requests. The values come from [the devnet pre-alpha](./devnet.md).
 
 ```ts
-import { DWalletGrpcClient } from '@ika.xyz/sdk-core/web';
-import { withMockCryptography } from '@ika.xyz/sdk-core/mock';
+import { DWalletGrpcClient } from '@ika.xyz/pre-alpha-core/web';
+import { withMockCryptography } from '@ika.xyz/pre-alpha-core/mock';
 import {
 	Curve,
 	Hash,
@@ -25,12 +25,12 @@ import {
 	IkaTransaction,
 	SignatureAlgorithm,
 	UserShareEncryptionKeys,
-} from '@ika.xyz/sdk-solana/web3';
+} from '@ika.xyz/pre-alpha-solana/web3';
 import { Connection, Keypair, PublicKey, Transaction } from '@solana/web3.js';
 import { ed25519 } from '@noble/curves/ed25519.js';
 
 const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
-const programId = new PublicKey('CqGtQgrYFUhobuknomFNntwoxCgKGkBRUtemgdPuM9qT');
+const programId = new PublicKey('8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv');
 const networkKey = Uint8Array.from(
 	Buffer.from('fe8a6482521cc4bae052c55cd5b3c92d05c8749bcc2c584046de3efb077d65ed', 'hex'),
 );

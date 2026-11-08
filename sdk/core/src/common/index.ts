@@ -4,13 +4,14 @@
 /**
  * The part of the ika dWallet SDK every chain shares: the request engine,
  * the base of each chain's `IkaClient`, and the user's keys. An app imports
- * its chain's package, `@ika.xyz/sdk-sui` or `@ika.xyz/sdk-solana`, which
+ * its chain's package, `@ika.xyz/sdk-sui` or `@ika.xyz/pre-alpha-solana`, which
  * re-exports what an app uses from here.
  */
 export { Curve, Hash, SignatureAlgorithm, stopWasmWorker, useWasmWorker } from '../index.js';
 export type { IkaNetwork, NetworkKeyId, ShareAcceptanceSignature, WasmWorker } from '../index.js';
 export {
 	EpochClosedBeforeAnswer,
+	FIRST_DEPOSIT_INCARNATION,
 	isImported,
 	Network,
 	PresignExpiredWithTheEpoch,

@@ -24,7 +24,7 @@ The variant's position is its BCS index, so the order is part of the wire format
 | 8 | `FutureSign` | Step 1 of a future sign | partial signature attestation |
 | 9 | `SignWithPartialUserSig` | Step 2 of a future sign | signature |
 | 10 | `ImportedKeySignWithPartialUserSig` | Step 2 for an imported dWallet | signature |
-| 11 | `ReleaseGas` | Asks the network to sign a gas withdrawal release | |
+| 11 | `RetiredReleaseGas` | Removed. Refused from its bytes | |
 | 12 | `RetiredAcceptShare` | Removed. Refused | |
 | 13 | `RetiredStorePresign` | Removed. Refused | |
 | 14 | `AttachEncryptedShare` | Not used on Solana | encrypted share attestation |
@@ -32,16 +32,20 @@ The variant's position is its BCS index, so the order is part of the wire format
 A holder accepts an encrypted share on chain, with its own transaction. That is why variant 12 is
 gone. See [Encrypted Shares](../on-chain/encrypted-shares.md).
 
+The network pays a gas withdrawal with its own transaction, once the deposit's owner sends
+`RequestWithdraw` on chain. No user asks the network for anything to withdraw, so variant 11 is
+gone too. See [Gas Deposits](../on-chain/gas-deposits.md).
+
 ## What the real network serves
 
-The real network serves every variant except the two removed ones, with one more exception: an
+The real network serves every variant except the three removed ones, with one more exception: an
 `ImportedKeyVerification` with a public share. It refuses that one with
 `gRPC request type not yet supported for session conversion`.
 
 ## What the mock network serves
 
-The devnet pre-alpha's mock network serves variants 0 to 10. It refuses `ReleaseGas`, because it
-charges nothing, and `AttachEncryptedShare`.
+The devnet pre-alpha's mock network serves variants 0 to 10. It refuses the three removed variants
+as the real network does, and `AttachEncryptedShare`.
 
 The mock makes every dWallet's key itself, an imported one included. An import request on the
 pre-alpha names a curve and nothing else, and no private key is ever sent. So an imported

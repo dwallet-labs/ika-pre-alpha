@@ -151,9 +151,6 @@ export const SignDuringDKGRequestBcs = bcs.struct('SignDuringDKGRequest', {
 	message_centralized_signature: bcs.vector(bcs.u8()),
 });
 
-/** Placeholder for a variant this SDK cannot construct yet. */
-const notYetSupported = (name: string) => bcs.struct(name, { unsupported: bcs.vector(bcs.u8()) });
-
 export const DWalletRequestBcs = bcs.enum('DWalletRequest', {
 	Dkg: bcs.struct('Dkg', {
 		// The key's NetworkKeyId (see `network-key-id.ts`); the classic
@@ -260,7 +257,11 @@ export const DWalletRequestBcs = bcs.enum('DWalletRequest', {
 		message_metadata: bcs.vector(bcs.u8()),
 		future_signature_voucher: bcs.fixedArray(32, bcs.u8()),
 	}),
-	ReleaseGas: notYetSupported('ReleaseGas'),
+	// Index 11 held `ReleaseGas`, a request for the network's signature over
+	// a gas release. The network now pays a requested withdrawal itself. The
+	// unit variant keeps the index, so the variants after it keep theirs, and
+	// every reader refuses it.
+	RetiredReleaseGas: null,
 	// Index 12 held `AcceptShare`, the holder's acceptance of an encrypted
 	// share. The holder now accepts its share on the chain. The unit variant
 	// keeps the index, so the variants after it keep theirs, and every reader
@@ -289,6 +290,11 @@ export const SignedRequestDataBcs = bcs.struct('SignedRequestData', {
 	// The network the request is for: 1 mainnet, 2 testnet, 3 a local
 	// network (`requestNetworkValue`). A validator refuses another network's.
 	network: bcs.u8(),
+	// The life of the signer's gas deposit the request may be charged to:
+	// the deposit's `incarnation` as the signer read it, 1 when it has none
+	// yet. A validator refuses, for free, a life the deposit has left, and
+	// holds a later life until it has read it.
+	deposit_incarnation: bcs.u64(),
 	intended_chain_sender: bcs.vector(bcs.u8()),
 	request: DWalletRequestBcs,
 });

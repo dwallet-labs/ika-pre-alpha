@@ -10,8 +10,8 @@
  * reads go through `rpc`, or `getAccount`: pass `crossCheck` with a second
  * endpoint, run by another provider, to have each one checked against it.
  */
-import type { IkaNetwork } from '@ika.xyz/sdk-core';
-import type { IkaClientBaseOptions } from '@ika.xyz/sdk-core/common';
+import type { IkaNetwork } from '@ika.xyz/pre-alpha-core';
+import type { IkaClientBaseOptions } from '@ika.xyz/pre-alpha-core/common';
 import { getAddressDecoder, getAddressEncoder, getBase64Encoder } from '@solana/kit';
 import type { Address, GetAccountInfoApi, Rpc } from '@solana/kit';
 

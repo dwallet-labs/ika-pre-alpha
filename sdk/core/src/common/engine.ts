@@ -16,7 +16,7 @@
  * Its epoch rule differs: every request names the epoch the chain
  * shows, and a request whose epoch closes before an answer is never signed
  * again. The Rust SDK still rebuilds such a request for the epoch a
- * validator names. The chain packages (`@ika.xyz/sdk-solana`,
+ * validator names. The chain packages (`@ika.xyz/pre-alpha-solana`,
  * `@ika.xyz/sdk-sui`) build the chain readers a connection takes.
  */
 import { ed25519 } from '@noble/curves/ed25519.js';
@@ -33,6 +33,7 @@ import {
 	futureSignRequest,
 	grpcSessionIdentifier,
 	isEpochClosingRefusal,
+	isRefusal,
 	listedNetworkKey,
 	makeSharePublicRequest,
 	networkKeyIdFromBytes,
@@ -40,6 +41,7 @@ import {
 	realCryptography,
 	recordOfAttestation,
 	reEncryptShareRequest,
+	RefusalCode,
 	requestNetworkValue,
 	requestSigningMessage,
 	signatureAlgorithmOnCurve,
@@ -170,6 +172,12 @@ export function signatureSchemeNumber(signatureScheme: SignatureScheme): Signatu
 	}
 	return number;
 }
+
+/**
+ * The life of a gas deposit that its first create opens. A request whose
+ * signer has no deposit yet names it (`deposit_incarnation`).
+ */
+export const FIRST_DEPOSIT_INCARNATION = 1n;
 
 /** Who signs a request, and what the request names about its chain. */
 export interface Requester {
@@ -460,6 +468,17 @@ export interface ConnectArguments {
 	 */
 	chainEpoch: () => Promise<bigint>;
 	/**
+	 * Reads the life (`incarnation`) of the gas deposit of `requestKey` on the
+	 * chain, or `undefined` when the key has none, from the chain package.
+	 * It is read before every request is signed, and the request names it
+	 * (`deposit_incarnation`): the network admits a request only for the life
+	 * it names, so a fresh read keeps a reopened deposit's requests from being
+	 * refused. The deposit is the request key's own, also when someone else
+	 * pays for it. Without the reader, and for a key with no deposit, a
+	 * request names {@link FIRST_DEPOSIT_INCARNATION}.
+	 */
+	depositIncarnation?: (requestKey: Uint8Array) => Promise<bigint | undefined>;
+	/**
 	 * The chain reads that find a request's session once its epoch closed
 	 * before an answer, from the chain package. Without them, every such
 	 * request throws {@link EpochClosedBeforeAnswer}.
@@ -496,6 +515,8 @@ export class Network {
 		/** The protocol parameters derived from the network key's checked output. */
 		readonly protocolPublicParameters: Uint8Array,
 		private readonly chainEpoch: () => Promise<bigint>,
+		private readonly depositIncarnation:
+			((requestKey: Uint8Array) => Promise<bigint | undefined>) | undefined,
 		private readonly requestRecords: RequestRecordReader | undefined,
 		private readonly shares: ((trusted: TrustedNetworkKeys) => DWalletShareReader) | undefined,
 		/** The client's cryptography: the user's half of each protocol step. */
@@ -582,6 +603,7 @@ export class Network {
 			latestNetworkKeyId,
 			protocolPublicParameters,
 			args.chainEpoch,
+			args.depositIncarnation,
 			args.requestRecords,
 			args.shares,
 			cryptography,
@@ -733,11 +755,19 @@ export class Network {
 		sign: (signedData: any) => Promise<SignedGrpcRequest>,
 		build: (epoch: bigint, sessionIdentifier: Uint8Array) => Promise<BuiltRequest<T>>,
 	): Promise<{ response: TransactionResponseData; sent: Sent<T> }> {
+		const depositIncarnation = await this.#readDepositIncarnation(requester);
 		const preimage = freshPreimage();
 		const sessionIdentifier = this.#sessionIdentifier(requester, epoch, preimage);
 		const { request, kept } = await build(epoch, sessionIdentifier);
 		const signed = await sign(
-			signedData(requester, requestNetworkValue(this.network), epoch, preimage, request),
+			signedData(
+				requester,
+				requestNetworkValue(this.network),
+				depositIncarnation,
+				epoch,
+				preimage,
+				request,
+			),
 		);
 		const sent = { epoch, sessionIdentifier, kept };
 		let answer: TransactionResponseData;
@@ -866,7 +896,9 @@ export class Network {
 		let answer = response;
 		while (
 			answer.$kind === 'Error' &&
-			answer.Error!.message.includes(NO_GAS_DEPOSIT_REFUSAL) &&
+			isRefusal(answer, [RefusalCode.NO_GAS_DEPOSIT], () =>
+				answer.Error!.message.includes(NO_GAS_DEPOSIT_REFUSAL),
+			) &&
 			Date.now() < deadline
 		) {
 			await new Promise((resolve) => setTimeout(resolve, DEPOSIT_READ_RETRY_MS));
@@ -902,6 +934,20 @@ export class Network {
 				await new Promise((resolve) => setTimeout(resolve, RESEND_INTERVAL_MS));
 			}
 		}
+	}
+
+	/**
+	 * The life of the requester's gas deposit a new request names, read
+	 * through `depositIncarnation`: the deposit of the request key, which the
+	 * network charges. A key with no deposit, and a connection with no
+	 * reader, name {@link FIRST_DEPOSIT_INCARNATION}.
+	 */
+	async #readDepositIncarnation(requester: Requester): Promise<bigint> {
+		if (this.depositIncarnation === undefined) return FIRST_DEPOSIT_INCARNATION;
+		return (
+			(await this.depositIncarnation(Uint8Array.from(requester.keypair.publicKey))) ??
+			FIRST_DEPOSIT_INCARNATION
+		);
 	}
 
 	/** Read the chain's epoch, keep it when it is later, and return the latest one seen. */
@@ -1399,7 +1445,9 @@ export class Network {
 			try {
 				return await this.#presign(requester, request, algorithm, null);
 			} catch (error) {
-				const poolEmpty = String((error as Error)?.message).includes(PRESIGN_POOL_EMPTY_REFUSAL);
+				const poolEmpty = isRefusal(error, [RefusalCode.PRESIGN_POOL_EMPTY], () =>
+					String((error as Error)?.message).includes(PRESIGN_POOL_EMPTY_REFUSAL),
+				);
 				if (!poolEmpty || Date.now() >= deadline) throw error;
 				await new Promise((resolve) => setTimeout(resolve, POOL_RETRY_MS));
 			}
@@ -2017,6 +2065,9 @@ function importedSecretKeyEncoding(curveNumber: number, secretKey: Uint8Array): 
  */
 function staleEpochRefusal(answer: TransactionResponseData, sentEpoch: bigint): bigint | undefined {
 	if (answer.$kind !== 'Error') return undefined;
+	// An answer whose code is another refusal is not this one. The epochs
+	// come from the sentence either way: it names both.
+	if (!isRefusal(answer, [RefusalCode.REQUEST_EPOCH_MISMATCH], () => true)) return undefined;
 	const match = /request epoch (\d+) does not match current epoch (\d+)/.exec(
 		answer.Error!.message,
 	);
@@ -2066,6 +2117,7 @@ function customOrListed(network: IkaNetwork, keys: readonly Uint8Array[]): Trust
 function signedData(
 	requester: Requester,
 	network: number,
+	depositIncarnation: bigint,
 	epoch: bigint,
 	preimage: Uint8Array,
 	request: any,
@@ -2075,6 +2127,7 @@ function signedData(
 		epoch,
 		chain_id: { [requester.chain]: null } as any,
 		network,
+		deposit_incarnation: depositIncarnation,
 		intended_chain_sender: Array.from(requester.intendedChainSender),
 		request,
 	};

@@ -57,7 +57,7 @@ chunks are the root.
 - An imported dWallet is at `["dwallet", "imported_record", root..., session_identifier]`.
 
 So a client finds a generated dWallet from its public key alone. In TypeScript,
-`dwalletPda(programId, curve, publicKey)` from `@ika.xyz/sdk-solana` derives it, and
+`dwalletPda(programId, curve, publicKey)` from `@ika.xyz/pre-alpha-solana` derives it, and
 `readDWallet(data)` reads the account.
 
 ## How a dWallet is created

@@ -184,10 +184,10 @@ importers:
 
   examples:
     dependencies:
-      '@ika.xyz/sdk-core':
+      '@ika.xyz/pre-alpha-core':
         specifier: workspace:*
         version: link:../sdk/core
-      '@ika.xyz/sdk-solana':
+      '@ika.xyz/pre-alpha-solana':
         specifier: workspace:*
         version: link:../sdk/solana
       '@noble/curves':
@@ -209,10 +209,10 @@ importers:
 
   examples/multisig/react:
     dependencies:
-      '@ika.xyz/sdk-core':
+      '@ika.xyz/pre-alpha-core':
         specifier: workspace:*
         version: link:../../../sdk/core
-      '@ika.xyz/sdk-solana':
+      '@ika.xyz/pre-alpha-solana':
         specifier: workspace:*
         version: link:../../../sdk/solana
       '@solana/wallet-adapter-base':
@@ -273,7 +273,7 @@ importers:
       '@grpc/proto-loader':
         specifier: ^0.7.13
         version: 0.7.15
-      '@ika.xyz/ika-wasm':
+      '@ika.xyz/pre-alpha-wasm':
         specifier: workspace:*
         version: link:../ika-wasm
       '@mysten/bcs':
@@ -306,7 +306,7 @@ importers:
 
   sdk/solana:
     dependencies:
-      '@ika.xyz/sdk-core':
+      '@ika.xyz/pre-alpha-core':
         specifier: workspace:*
         version: link:../core
       '@mysten/bcs':
