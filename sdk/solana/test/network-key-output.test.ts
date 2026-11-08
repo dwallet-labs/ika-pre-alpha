@@ -15,8 +15,8 @@ import {
 	NetworkKeyOutputError,
 	networkKeyReconfigurationRecordMessage,
 	networkOutputDigest,
-} from '@ika.xyz/sdk-core';
-import type { IkaNetwork, NetworkKeyOutput } from '@ika.xyz/sdk-core';
+} from '@ika.xyz/pre-alpha-core';
+import type { IkaNetwork, NetworkKeyOutput } from '@ika.xyz/pre-alpha-core';
 import { ed25519 } from '@noble/curves/ed25519.js';
 import { describe, expect, it, vi } from 'vitest';
 

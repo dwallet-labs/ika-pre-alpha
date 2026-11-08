@@ -6,8 +6,8 @@
  * encryption key, for the seed 1, 2, ..., 32. The Rust SDK's tests pin the
  * same values.
  */
-import { Curve } from '@ika.xyz/sdk-core';
-import { UserShareEncryptionKeys } from '@ika.xyz/sdk-core/common';
+import { Curve } from '@ika.xyz/pre-alpha-core';
+import { UserShareEncryptionKeys } from '@ika.xyz/pre-alpha-core/common';
 import { keccak_256 } from '@noble/hashes/sha3.js';
 import { describe, expect, it } from 'vitest';
 

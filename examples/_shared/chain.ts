@@ -12,10 +12,10 @@
  *
  * Nothing here writes an instruction byte, an account discriminator or a
  * derived address of the ika program out by hand. Those come from
- * `@ika.xyz/sdk-solana`, which reads them from the program's own table.
+ * `@ika.xyz/pre-alpha-solana`, which reads them from the program's own table.
  */
 import { Buffer } from 'node:buffer';
-import { approvalMessageDigests, readSignatureVoucherUnverified } from '@ika.xyz/sdk-solana';
+import { approvalMessageDigests, readSignatureVoucherUnverified } from '@ika.xyz/pre-alpha-solana';
 import { Connection, PublicKey } from '@solana/web3.js';
 
 import { pollUntil } from './helpers.ts';

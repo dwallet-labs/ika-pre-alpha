@@ -6,8 +6,8 @@
  * give the same result as on the calling thread, the calling thread keeps
  * running meanwhile, and a computation's error reaches the caller.
  */
-import { Curve, publicKeyFromDWalletOutput } from '@ika.xyz/sdk-core';
-import { stopWasmWorker, UserShareEncryptionKeys, useWasmWorker } from '@ika.xyz/sdk-core/common';
+import { Curve, publicKeyFromDWalletOutput } from '@ika.xyz/pre-alpha-core';
+import { stopWasmWorker, UserShareEncryptionKeys, useWasmWorker } from '@ika.xyz/pre-alpha-core/common';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const SEED = new Uint8Array(32).fill(4);

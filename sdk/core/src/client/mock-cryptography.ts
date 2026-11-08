@@ -5,7 +5,7 @@
  * The SDK's mock mode: the user's half of each protocol step, for a mock ika
  * network, with no 2PC-MPC.
  *
- * This module is reached only through the entry `@ika.xyz/sdk-core/mock`. The
+ * This module is reached only through the entry `@ika.xyz/pre-alpha-core/mock`. The
  * main entry never imports it, so an app that does not import that entry
  * ships no mock code. A client runs it only when it was created with
  * {@link mockCryptography}, through `withMockCryptography`; every other

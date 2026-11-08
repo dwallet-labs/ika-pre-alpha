@@ -127,7 +127,7 @@ cargo test -p ika-example-multisig-anchor   # anchor (LiteSVM)
 
 # TypeScript E2E, against the devnet pre-alpha (see the E2E Demo page)
 cd examples && bun install
-PAYER_KEYPAIR=<your-keypair.json> bun multisig/e2e/main.ts CqGtQgrYFUhobuknomFNntwoxCgKGkBRUtemgdPuM9qT <MULTISIG_ID>
+PAYER_KEYPAIR=<your-keypair.json> bun multisig/e2e/main.ts 8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv <MULTISIG_ID>
 ```
 
 ## Source Files

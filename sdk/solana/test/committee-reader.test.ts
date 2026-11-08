@@ -6,7 +6,7 @@
  * through `solanaCommitteeReader`: the `SystemState` epoch, and whether a
  * network key's `NetworkEncryptionKey` account exists.
  */
-import type { IkaNetwork } from '@ika.xyz/sdk-core';
+import type { IkaNetwork } from '@ika.xyz/pre-alpha-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { deriveAddress, networkEncryptionKeyPda } from '../src/addresses.js';

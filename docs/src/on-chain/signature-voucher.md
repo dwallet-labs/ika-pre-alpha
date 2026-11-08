@@ -55,7 +55,7 @@ the signature scheme hashes the message with. The network computes the same dige
 message in the sign request, and compares the two.
 
 ```typescript
-import { approvalMessageDigests } from '@ika.xyz/sdk-solana';
+import { approvalMessageDigests } from '@ika.xyz/pre-alpha-solana';
 
 const { messageDigest, messageMetadataDigest } = approvalMessageDigests(message);
 ```
@@ -187,7 +187,7 @@ The stored signature is the same bytes the gRPC answer carried. An ECDSA signatu
 a recovery byte, then `r` and `s`. Taproot, EdDSA and Schnorrkel signatures are 64 bytes.
 
 Nothing in the account proves the signature is correct. Verify it under the dWallet's public key
-before you use it. In TypeScript, `readSignatureVoucherVerified` from `@ika.xyz/sdk-solana` reads
+before you use it. In TypeScript, `readSignatureVoucherVerified` from `@ika.xyz/pre-alpha-solana` reads
 the voucher and verifies its signature.
 
 ## Checks for a program that reads a voucher

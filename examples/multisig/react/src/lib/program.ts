@@ -1,12 +1,12 @@
 import { Buffer } from 'buffer';
-import { approvalMessageDigests } from '@ika.xyz/sdk-solana';
-import { coordinatorAddress } from '@ika.xyz/sdk-solana/instructions';
+import { approvalMessageDigests } from '@ika.xyz/pre-alpha-solana';
+import { coordinatorAddress } from '@ika.xyz/pre-alpha-solana/instructions';
 import { Connection, PublicKey, SystemProgram, TransactionInstruction } from '@solana/web3.js';
 
 // This file is the MULTISIG program's own instructions and account layout.
 // Everything about the dWallet program — its derived addresses, its
 // instruction bytes, its account discriminators — comes from
-// `@ika.xyz/sdk-solana`, which reads them from the program's own table. Before that package existed this file
+// `@ika.xyz/pre-alpha-solana`, which reads them from the program's own table. Before that package existed this file
 // derived them itself, and one address it derived was wrong: it put the kind
 // tag AFTER the variable-length root, so the page wrote an account at an
 // address the validators never read.

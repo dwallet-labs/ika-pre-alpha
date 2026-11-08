@@ -204,7 +204,7 @@ async function signDuringDkgSignatureVerifies(
  * the digest the first share's chain record stores. Pass the result to the
  * chain client's accept builder: `acceptEncryptedUserShareTx` in
  * `@ika.xyz/sdk-sui`, or `acceptEncryptedUserShareInstructions` in
- * `@ika.xyz/sdk-solana`. Any key may send that transaction and pay for it.
+ * `@ika.xyz/pre-alpha-solana`. Any key may send that transaction and pay for it.
  *
  * The checks, in order. The first that fails throws an
  * `AttestationRecordError`, and nothing is signed:

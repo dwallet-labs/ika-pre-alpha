@@ -5,13 +5,13 @@ instructions that go with them. It runs in Node and in a browser.
 
 It comes as two packages:
 
-- `@ika.xyz/sdk-core` is the part every chain shares: the requests to the network, the user's keys,
+- `@ika.xyz/pre-alpha-core` is the part every chain shares: the requests to the network, the user's keys,
   the checks of the network's answers, and the user's half of each protocol step.
-- `@ika.xyz/sdk-solana` is the Solana part: the program's addresses and instructions, the readers
+- `@ika.xyz/pre-alpha-solana` is the Solana part: the program's addresses and instructions, the readers
   for its accounts, and the `IkaClient` and `IkaTransaction` classes an app uses.
 
-`@ika.xyz/sdk-solana` has two entry points with the same classes. Import
-`@ika.xyz/sdk-solana/web3` if your app uses `@solana/web3.js`, or `@ika.xyz/sdk-solana/kit` if it
+`@ika.xyz/pre-alpha-solana` has two entry points with the same classes. Import
+`@ika.xyz/pre-alpha-solana/web3` if your app uses `@solana/web3.js`, or `@ika.xyz/pre-alpha-solana/kit` if it
 uses `@solana/kit`. The examples below use web3.js.
 
 ## The three classes
@@ -29,8 +29,8 @@ acceptance and the vouchers that approve messages.
 ## Creating the client
 
 ```ts
-import { DWalletGrpcClient } from '@ika.xyz/sdk-core/web';
-import { IkaClient } from '@ika.xyz/sdk-solana/web3';
+import { DWalletGrpcClient } from '@ika.xyz/pre-alpha-core/web';
+import { IkaClient } from '@ika.xyz/pre-alpha-solana/web3';
 
 const ikaClient = new IkaClient({
 	connection, // a @solana/web3.js Connection
@@ -48,7 +48,7 @@ the user signs the chain number and the network value into their gas deposit.
 `grpc` is how the client reaches the network:
 
 - For the devnet pre-alpha, in a browser or in Node, pass a `DWalletGrpcClient` from
-  `@ika.xyz/sdk-core/web`, made with the `https://` URL of the network's gRPC-Web endpoint. This
+  `@ika.xyz/pre-alpha-core/web`, made with the `https://` URL of the network's gRPC-Web endpoint. This
   client sends its calls through `fetch`, so it works in Node too. In a browser bundle, a plain
   `https://` URL string works as well.
 - In Node against validators, pass a validator's `host:port` string. The client then pins TLS to
@@ -62,10 +62,10 @@ Reads of Solana go through `connection`. To read through something else, pass
 ## Mock mode for the pre-alpha
 
 The devnet pre-alpha needs the client in mock mode. Wrap the client's options in
-`withMockCryptography`, from the separate entry `@ika.xyz/sdk-core/mock`:
+`withMockCryptography`, from the separate entry `@ika.xyz/pre-alpha-core/mock`:
 
 ```ts
-import { withMockCryptography } from '@ika.xyz/sdk-core/mock';
+import { withMockCryptography } from '@ika.xyz/pre-alpha-core/mock';
 
 const ikaClient = new IkaClient(
 	withMockCryptography({
@@ -95,7 +95,7 @@ Mock mode is safe to leave in the code by mistake, for three reasons:
 - Mock mode belongs to one client. Every other client, in the same process too, refuses the mock's
   values with the error "mock values need the SDK's mock feature".
 
-The main entry of `@ika.xyz/sdk-core` never imports `/mock`, so an app that does not import it ships
+The main entry of `@ika.xyz/pre-alpha-core` never imports `/mock`, so an app that does not import it ships
 no mock code.
 
 In mock mode, importing a key does not read the key you pass. The mock makes a new key for the
@@ -107,7 +107,7 @@ Each step below that changes Solana is a transaction the user's wallet signs. A 
 examples short:
 
 ```ts
-import { IkaTransaction, UserShareEncryptionKeys, Curve } from '@ika.xyz/sdk-solana/web3';
+import { IkaTransaction, UserShareEncryptionKeys, Curve } from '@ika.xyz/pre-alpha-solana/web3';
 import { Transaction } from '@solana/web3.js';
 
 const keys = await UserShareEncryptionKeys.fromRootSeedKey(rootSeed, Curve.ED25519);
@@ -261,14 +261,14 @@ tx.sign([wallet]);
 
 ## With @solana/kit
 
-`@ika.xyz/sdk-solana/kit` is the same SDK with kit types. Every address is a kit `Address`.
+`@ika.xyz/pre-alpha-solana/kit` is the same SDK with kit types. Every address is a kit `Address`.
 `IkaClient` reads through a kit `Rpc`. `IkaTransaction` returns kit instructions to append to your
 transaction message. The voucher's keypair signer is attached to its account, and so are the owner
 and the payer when you pass them as signers. So `signTransactionMessageWithSigners` signs the whole
 transaction.
 
 ```ts
-import { IkaClient, IkaTransaction } from '@ika.xyz/sdk-solana/kit';
+import { IkaClient, IkaTransaction } from '@ika.xyz/pre-alpha-solana/kit';
 import {
 	appendTransactionMessageInstructions,
 	createSolanaRpc,
@@ -297,7 +297,7 @@ still needs `@solana/web3.js` installed, because the SDK builds its instructions
 
 ## In a browser
 
-- Use the gRPC-Web client from `@ika.xyz/sdk-core/web`. The network's gRPC-Web endpoint serves a
+- Use the gRPC-Web client from `@ika.xyz/pre-alpha-core/web`. The network's gRPC-Web endpoint serves a
   public TLS certificate, and the SDK's checks of each answer verify what the network signed.
 - The user's device computes its half of every protocol step. On the real network, creating a dWallet
   takes about 10 seconds of computation and a secp256k1 sign about 8. On a page's main thread that
@@ -360,7 +360,7 @@ const ikaClient = new IkaClient({
 
 ## The lower-level parts
 
-`IkaClient` and `IkaTransaction` are built on the root entry of `@ika.xyz/sdk-solana`, which an app
+`IkaClient` and `IkaTransaction` are built on the root entry of `@ika.xyz/pre-alpha-solana`, which an app
 can use to build its own flow:
 
 - **Addresses.** `dwalletPda`, `gasDepositPda`, `encryptionKeyPda`, `dwalletCoordinatorPda` and the
@@ -370,7 +370,7 @@ can use to build its own flow:
   the others decode the program's accounts. Each returns `null` for data that is not an account of
   its type. `readSignatureVoucherVerified` throws when the voucher is not for the dWallet, message,
   metadata and scheme you expect, and returns the signature only after your verifier accepts it.
-- **Instruction builders**, on `@ika.xyz/sdk-solana/instructions`: `createDepositInstructions`,
+- **Instruction builders**, on `@ika.xyz/pre-alpha-solana/instructions`: `createDepositInstructions`,
   `transferOwnershipInstruction`, `issueSignatureVoucherInstruction`, `topUpInstruction` and others.
   This entry is the only one that needs `@solana/web3.js`.
 - **Instruction bytes and account tags.** `instructionByte(name)` and `accountDiscriminator(name)`

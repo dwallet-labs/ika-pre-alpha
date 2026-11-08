@@ -16,7 +16,7 @@
  * endpoint alone. `readEncryptionKey` takes the same choice.
  *
  * The rules of the cross-check are `crossCheckedRead`'s in
- * `@ika.xyz/sdk-core`. `getAccount` reports no slot, so the slot rule the
+ * `@ika.xyz/pre-alpha-core`. `getAccount` reports no slot, so the slot rule the
  * Rust reader applies (re-read the lagging endpoint at the other's slot)
  * cannot run here. A read whose value only grows, the epoch, uses the value
  * itself as the position, so the endpoint with the lower value is read again
@@ -25,7 +25,7 @@
  * nothing while the other finds the account is read again until the window
  * ends, and two different accounts are refused at once.
  */
-import { crossCheckedRead } from '@ika.xyz/sdk-core';
+import { crossCheckedRead } from '@ika.xyz/pre-alpha-core';
 
 import type { ReadAccount } from './usability.js';
 

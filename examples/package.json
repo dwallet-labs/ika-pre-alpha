@@ -9,8 +9,8 @@
 		"multisig": "tsx multisig/e2e/main.ts"
 	},
 	"dependencies": {
-		"@ika.xyz/sdk-core": "workspace:*",
-		"@ika.xyz/sdk-solana": "workspace:*",
+		"@ika.xyz/pre-alpha-core": "workspace:*",
+		"@ika.xyz/pre-alpha-solana": "workspace:*",
 		"@noble/curves": "^2.3.0",
 		"@solana/web3.js": "^1.98.0"
 	},

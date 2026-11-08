@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 
 // The browser-safe entry. The network client is not exported here: import it
-// from `@ika.xyz/sdk-core/client` in Node, which opens sockets, or from
-// `@ika.xyz/sdk-core/web` in a browser, which speaks gRPC-Web over `fetch`.
+// from `@ika.xyz/pre-alpha-core/client` in Node, which opens sockets, or from
+// `@ika.xyz/pre-alpha-core/web` in a browser, which speaks gRPC-Web over `fetch`.
 export * from './client/cryptography.js';
 export * from './client/hash-signature-validation.js';
 export * from './client/types.js';

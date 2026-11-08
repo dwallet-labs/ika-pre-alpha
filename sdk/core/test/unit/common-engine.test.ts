@@ -21,6 +21,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	EpochClosedBeforeAnswer,
+	FIRST_DEPOSIT_INCARNATION,
 	Network,
 	NO_GAS_DEPOSIT_REFUSAL,
 	PRESIGN_POOL_EMPTY_REFUSAL,
@@ -271,6 +272,8 @@ async function connected(
 		chain?: { epoch: bigint };
 		/** The chain's records of requests, for the lookup after an epoch close. */
 		requestRecords?: RequestRecordReader;
+		/** The read of the request key's gas deposit life. */
+		depositIncarnation?: (requestKey: Uint8Array) => Promise<bigint | undefined>;
 	} = {},
 ) {
 	const dkgOutput = options.dkgOutput ?? NETWORK_KEY_DKG_OUTPUT;
@@ -288,6 +291,7 @@ async function connected(
 		network: NETWORK,
 		records: chainRecording(dkgOutput),
 		chainEpoch: async () => chain.epoch,
+		depositIncarnation: options.depositIncarnation,
 		requestRecords: options.requestRecords,
 	});
 	return { network, chain, ...stub };
@@ -497,6 +501,30 @@ describe('Network presigns', () => {
 		await network.requestPresign(requester, 5);
 		expect(received[0].epoch).toBe(EPOCH + 1n);
 		expect(network.epoch).toBe(EPOCH + 1n);
+	});
+
+	it("names the life of the request key's own gas deposit, read before each request", async () => {
+		const keysRead: string[] = [];
+		const { network, received } = await connected((request) => presignAnswer(request), {
+			depositIncarnation: async (requestKey) => {
+				keysRead.push(hex(requestKey));
+				return 4n;
+			},
+		});
+		await network.requestPresign(requester, 5);
+		expect(received[0].data.deposit_incarnation).toBe('4');
+		expect(keysRead).toEqual([hex(requester.keypair.publicKey)]);
+	});
+
+	it('names life 1 for a key with no deposit, and without a reader', async () => {
+		const noDeposit = await connected((request) => presignAnswer(request), {
+			depositIncarnation: async () => undefined,
+		});
+		await noDeposit.network.requestPresign(requester, 5);
+		expect(noDeposit.received[0].data.deposit_incarnation).toBe(String(FIRST_DEPOSIT_INCARNATION));
+		const noReader = await connected((request) => presignAnswer(request));
+		await noReader.network.requestPresign(requester, 5);
+		expect(noReader.received[0].data.deposit_incarnation).toBe('1');
 	});
 
 	it('sends byte-identical requests on every resend within an epoch', async () => {

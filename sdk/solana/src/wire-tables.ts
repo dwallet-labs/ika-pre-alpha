@@ -67,6 +67,11 @@ interface WireTables {
 	instructions: Record<string, number>;
 	accounts: Record<string, AccountEntry>;
 	seed_schemas: Record<string, SeedSchema>;
+	events: {
+		instruction_tag_le: number[];
+		event_authority_seed: string;
+		discriminators: Record<string, number>;
+	};
 }
 
 const wireTables = tables as unknown as WireTables;
@@ -86,6 +91,18 @@ function look<T>(kind: string, map: Record<string, T>, name: string): T {
 /** The first byte of an instruction's data, by the program's name for it. */
 export function instructionByte(name: string): number {
 	return look('instruction', wireTables.instructions, name);
+}
+
+/**
+ * The eight bytes every event starts with. The program emits an event by
+ * calling itself, so an event is the data of one inner instruction of the
+ * transaction that made it: these bytes, the event's number, its fields.
+ */
+export const EVENT_INSTRUCTION_TAG = Uint8Array.from(wireTables.events.instruction_tag_le);
+
+/** The number an event's data carries right after the tag, by the program's name for it. */
+export function eventDiscriminator(name: string): number {
+	return look('event', wireTables.events.discriminators, name);
 }
 
 /** Everything the table states about one account type. */

@@ -1,7 +1,7 @@
 // Copyright (c) dWallet Labs, Ltd.
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 
-import type * as WasmModule from '@ika.xyz/ika-wasm';
+import type * as WasmModule from '@ika.xyz/pre-alpha-wasm';
 
 let wasmModule: typeof WasmModule | null = null;
 let initPromise: Promise<void> | null = null;
@@ -9,13 +9,20 @@ const isNode = typeof process !== 'undefined' && !!process.versions?.node;
 
 export async function ensureWasmInitialized() {
 	if (wasmModule) return;
-	if (!initPromise) initPromise = init();
+	if (!initPromise) {
+		// A failed load is not kept. The next call loads the module again,
+		// so one network error does not break the SDK until a restart.
+		initPromise = init().catch((error: unknown) => {
+			initPromise = null;
+			throw error;
+		});
+	}
 	await initPromise;
 }
 
 async function init() {
 	// Always import root; exports pick web vs node for us
-	const mod: any = await import('@ika.xyz/ika-wasm');
+	const mod: any = await import('@ika.xyz/pre-alpha-wasm');
 
 	if (isNode) {
 		// Node glue self-initializes (uses fs internally)
@@ -35,7 +42,7 @@ async function init() {
 }
 
 /**
- * `@ika.xyz/ika-wasm` loaded in this thread. The worker program calls it; every
+ * `@ika.xyz/pre-alpha-wasm` loaded in this thread. The worker program calls it; every
  * other caller goes through `getWasmModule`, which honours `useWasmWorker`.
  */
 export async function wasmModuleOfThisThread(): Promise<typeof WasmModule> {
@@ -52,7 +59,7 @@ async function getWasmModule(): Promise<typeof WasmModule> {
 /** A WASM call the main thread sends to the worker. */
 export interface WasmCall {
 	id: number;
-	/** The name of an `@ika.xyz/ika-wasm` function. */
+	/** The name of an `@ika.xyz/pre-alpha-wasm` function. */
 	name: string;
 	args: unknown[];
 }
@@ -62,7 +69,7 @@ export type WasmCallAnswer = { id: number; result: unknown } | { id: number; err
 
 /**
  * A worker the WASM calls can run in, as a browser's `Worker` is: a module
- * worker that runs `@ika.xyz/sdk-core/wasm-worker`.
+ * worker that runs `@ika.xyz/pre-alpha-core/wasm-worker`.
  */
 export interface WasmWorker {
 	postMessage(message: unknown): void;
@@ -128,7 +135,7 @@ class WorkerCalls {
 	failed(reason: string): void {
 		const error = new Error(
 			`the WASM worker ${reason}. If your bundler did not ship the worker file, pass ` +
-				'your own worker, made from `@ika.xyz/sdk-core/wasm-worker`, to useWasmWorker',
+				'your own worker, made from `@ika.xyz/pre-alpha-core/wasm-worker`, to useWasmWorker',
 		);
 		this.#pending.forEach(({ reject }) => reject(error));
 		this.#pending.clear();
@@ -155,7 +162,7 @@ let workerCalls: WorkerCalls | null = null;
  * and a `worker_threads` worker in Node. A worker that is idle does not keep a
  * Node process alive. Pass `worker` to use a worker you made, for example
  * when your bundler does not ship the package's own:
- * `new Worker(new URL('@ika.xyz/sdk-core/wasm-worker', import.meta.url), { type: 'module' })`.
+ * `new Worker(new URL('@ika.xyz/pre-alpha-core/wasm-worker', import.meta.url), { type: 'module' })`.
  *
  * The setting is for the whole page or process, not for one client. Calling
  * it again stops the previous worker, and its pending calls are rejected.

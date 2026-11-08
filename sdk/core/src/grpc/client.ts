@@ -54,7 +54,7 @@ export { EVERY_VALIDATOR_REFUSED, PIN_REFUSAL_MAX_AGE_MS } from './dwallet-clien
  *   committee again through it, so the client follows the committee into a
  *   later epoch. The reader comes from the chain client:
  *   `createSuiCommitteeReader` of `@ika.xyz/sdk-sui` or
- *   `solanaCommitteeReader` of `@ika.xyz/sdk-solana`.
+ *   `solanaCommitteeReader` of `@ika.xyz/pre-alpha-solana`.
  * A validator with none of these is refused when the client is built.
  *
  * The pinned connection follows Sui's validator client. The client reads the

@@ -51,8 +51,8 @@ import { Buffer } from 'node:buffer';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { SIGNATURE_SCHEME_EDDSA_SHA512 } from '@ika.xyz/sdk-solana';
-import { coordinatorAddress } from '@ika.xyz/sdk-solana/instructions';
+import { SIGNATURE_SCHEME_EDDSA_SHA512 } from '@ika.xyz/pre-alpha-solana';
+import { coordinatorAddress } from '@ika.xyz/pre-alpha-solana/instructions';
 import { ed25519 } from '@noble/curves/ed25519.js';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 

@@ -7,7 +7,7 @@
  * Every client holds one {@link UserCryptography}. It is
  * {@link realCryptography}, the 2PC-MPC protocol, unless the client was
  * created for a mock ika network with `withMockCryptography` from the
- * separate entry `@ika.xyz/sdk-core/mock`. The main entry never imports that
+ * separate entry `@ika.xyz/pre-alpha-core/mock`. The main entry never imports that
  * entry, so an app that does not import it ships no mock code.
  *
  * The real implementation refuses every mock value

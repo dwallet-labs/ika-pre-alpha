@@ -20,7 +20,8 @@
  *
  * Nothing here needs Node. Node's own `fetch` runs it too.
  */
-import { DWALLET_SERVICE_NAME } from './messages.js';
+import { decodeRefusalDetails, DWALLET_SERVICE_NAME } from './messages.js';
+import { markRefusalCode } from './refusal-code.js';
 import type { DWalletTransport, UnaryAnswer } from './transport.js';
 import { closedClientError, GrpcStatus } from './transport.js';
 
@@ -246,6 +247,40 @@ export function grpcStatusOf(
 }
 
 /**
+ * The refusal code in `fields`, the trailers or the response headers: the
+ * `RefusalDetails` message of the `grpc-status-details-bin` field, which gRPC
+ * sends in base64, maybe without its padding. A missing field, or one that
+ * does not decode, gives `RefusalCode.UNSPECIFIED`, 0.
+ */
+export function refusalCodeOfFields(fields: Record<string, string>): number {
+	const encoded = fields['grpc-status-details-bin'];
+	if (encoded === undefined) {
+		return 0;
+	}
+	let bytes: Uint8Array;
+	try {
+		const padded = encoded.padEnd(encoded.length + ((4 - (encoded.length % 4)) % 4), '=');
+		bytes = Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+	} catch {
+		return 0;
+	}
+	return decodeRefusalDetails(bytes);
+}
+
+/**
+ * The error of the status `status`, read from `fields`, keeping the refusal
+ * code `fields` carry.
+ */
+function statusError(
+	status: { code: number; details: string },
+	fields: Record<string, string>,
+): Error & { code: number; details: string } {
+	const error = grpcWebError(status.code, status.details);
+	markRefusalCode(error, refusalCodeOfFields(fields));
+	return error;
+}
+
+/**
  * The gRPC status of an HTTP answer that is not `200` and carries no
  * `grpc-status`: a proxy or a server that refused the call before gRPC saw it.
  * It is the mapping the gRPC project gives for HTTP status codes.
@@ -464,10 +499,10 @@ async function readUnaryAnswer(
 					grpcStatusOfHttp(response.status),
 					`the validator at ${url} answered HTTP ${response.status} ${response.statusText}`.trim(),
 				)
-			: grpcWebError(fromHeaders.code, fromHeaders.details);
+			: statusError(fromHeaders, headers);
 	}
 	if (fromHeaders !== undefined && fromHeaders.code !== GrpcWebStatus.OK) {
-		throw grpcWebError(fromHeaders.code, fromHeaders.details);
+		throw statusError(fromHeaders, headers);
 	}
 	const contentType = headers['content-type'] ?? '';
 	if (!contentType.startsWith(GRPC_WEB_CONTENT_TYPE) && contentType !== 'application/grpc-web') {
@@ -544,7 +579,7 @@ async function readUnaryAnswer(
 		);
 	}
 	if (status.code !== GrpcWebStatus.OK) {
-		throw grpcWebError(status.code, status.details);
+		throw statusError(status, trailers ?? headers);
 	}
 	if (data.length !== 1) {
 		throw grpcWebError(

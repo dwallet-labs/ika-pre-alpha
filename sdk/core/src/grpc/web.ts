@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 
 /**
- * The dWallet gRPC client for a browser: `@ika.xyz/sdk-core/web`.
+ * The dWallet gRPC client for a browser: `@ika.xyz/pre-alpha-core/web`.
  *
- * It has the calls of the Node client at `@ika.xyz/sdk-core/client`, with the
+ * It has the calls of the Node client at `@ika.xyz/pre-alpha-core/client`, with the
  * same failover, epoch-close and network-keys rules, over gRPC-Web through
  * `fetch` (`./web-transport.ts`). It needs a validator's gRPC-Web listener,
  * which answers the page's CORS checks.
@@ -67,7 +67,7 @@ function refuseNodeOnlyOptions(endpoint: string, fields: object): void {
 				`the browser client cannot honour \`${name}\` for the validator at ${endpoint}: ` +
 					`${reason}. In a browser the validator's gRPC-Web listener serves a publicly ` +
 					"trusted certificate, and the SDK's answer checks verify what the network signed; " +
-					`leave \`${name}\` out, or use \`@ika.xyz/sdk-core/client\` in Node`,
+					`leave \`${name}\` out, or use \`@ika.xyz/pre-alpha-core/client\` in Node`,
 			);
 		}
 	});

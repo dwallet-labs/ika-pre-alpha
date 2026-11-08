@@ -57,6 +57,7 @@ pub struct SignedRequestData {
     pub epoch: u64,
     pub chain_id: ChainId,             // the chain the request is for: Solana here
     pub network: u8,                   // 1 mainnet, 2 testnet, 3 a local network
+    pub deposit_incarnation: u64,      // the life of the request key's gas deposit
     pub intended_chain_sender: Vec<u8>,
     pub request: DWalletRequest,
 }
@@ -68,6 +69,7 @@ pub struct SignedRequestData {
 | `epoch` | The epoch the chain shows. On Solana, the `DWalletCoordinator`'s `epoch` |
 | `chain_id` | The chain the result is written to. `Solana` for this program |
 | `network` | The network the request is for: 1 mainnet, 2 testnet, 3 a local network. A validator refuses a request for another network, free of charge |
+| `deposit_incarnation` | The `incarnation` of the request key's `GasDeposit` account, read just before signing, or 1 when the key has no deposit yet. Each reopen of a closed deposit adds one. A validator refuses, free of charge, a request that names an earlier life, and holds one that names a later life until it has read it. The deposit is always the request key's own, even when someone else pays for it |
 | `intended_chain_sender` | The user's 32-byte Solana address. A new dWallet's owner is this address |
 | `request` | The operation. See [Request Types](./request-types.md) |
 
@@ -96,7 +98,7 @@ The prefix is not sent. The validators add it, then verify. They refuse a signat
 bytes. The first byte, `0xFF`, cannot start a Solana transaction message, so a request key that is
 also a Solana wallet never signs a request by mistake.
 
-In TypeScript, `signGrpcRequest` from `@ika.xyz/sdk-core` signs a request, and
+In TypeScript, `signGrpcRequest` from `@ika.xyz/pre-alpha-core` signs a request, and
 `requestSigningMessage` builds the message.
 
 ## What the network checks first
@@ -118,7 +120,8 @@ The mock network makes the same checks in the same order.
 
 ```protobuf
 message TransactionResponse {
-  bytes response_data = 1; // BCS of TransactionResponseData
+  bytes response_data = 1;      // BCS of TransactionResponseData
+  RefusalCode refusal_code = 2; // which refusal an Error answer is, or UNSPECIFIED
 }
 ```
 
@@ -133,6 +136,12 @@ pub enum TransactionResponseData {
 A sign is answered with the signature. Every other served request is answered with an
 attestation: a record the network signed. A refused request is answered with an error message.
 See [Response Types](./response-types.md).
+
+When the refusal is one a client acts on, such as an empty presign pool or a missing gas deposit,
+`refusal_code` names it. The message is the same either way. A validator built before the field
+existed leaves it `REFUSAL_CODE_UNSPECIFIED`, so a client that finds no code reads the message.
+A refusal sent as a gRPC status carries the same code in the status's details, as a
+`RefusalDetails` message.
 
 A gRPC status of `UNAVAILABLE` means "send the same bytes again later". It is not a refusal. The
 SDKs send the same signed bytes again; they never sign a new request for it.

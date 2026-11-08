@@ -4,9 +4,9 @@
 /**
  * What `IkaClient` does on Solana whichever library names its addresses:
  * the network's requests (from `IkaClientBase`) and the reads of the ika
- * program's accounts. `IkaClient` of `@ika.xyz/sdk-solana/web3` names an
+ * program's accounts. `IkaClient` of `@ika.xyz/pre-alpha-solana/web3` names an
  * address by a `@solana/web3.js` `PublicKey`, and that of
- * `@ika.xyz/sdk-solana/kit` by a `@solana/kit` `Address`.
+ * `@ika.xyz/pre-alpha-solana/kit` by a `@solana/kit` `Address`.
  *
  * Reads that a network signature covers are checked against it. The other
  * reads go through `getAccount`: pass `crossCheck` with a second endpoint,
@@ -18,7 +18,7 @@ import {
 	fromCurveToNumber,
 	fromNumberToCurve,
 	verifySignatureWithScheme,
-} from '@ika.xyz/sdk-core';
+} from '@ika.xyz/pre-alpha-core';
 import type {
 	CommitteeChainReader,
 	Curve,
@@ -29,21 +29,21 @@ import type {
 	NetworkKeyOutputRecordReader,
 	SignatureAlgorithm,
 	TrustedNetworkKeys,
-} from '@ika.xyz/sdk-core';
-import { DWalletGrpcClient } from '@ika.xyz/sdk-core/auto';
+} from '@ika.xyz/pre-alpha-core';
+import { DWalletGrpcClient } from '@ika.xyz/pre-alpha-core/auto';
 import type {
 	DWallet,
 	IkaClientBaseOptions,
 	VoucherApproval,
 	WaitOptions,
-} from '@ika.xyz/sdk-core/common';
+} from '@ika.xyz/pre-alpha-core/common';
 import {
 	IkaClientBase,
 	poll,
 	RequestRecordReader,
 	signatureSchemeNumber,
 	signatureSchemeOf,
-} from '@ika.xyz/sdk-core/common';
+} from '@ika.xyz/pre-alpha-core/common';
 import { PublicKey } from '@solana/web3.js';
 
 import {
@@ -53,14 +53,20 @@ import {
 	readDWallet,
 	readDWalletCoordinator,
 	readFutureSignatureVoucherUnverified,
+	readGasDeposit,
 	readSignatureVoucherUnverified,
 	readSignatureVoucherVerified,
 	SIGNATURE_VOUCHER_PENDING,
 	SIGNATURE_VOUCHER_SIGNED,
 } from './accounts.js';
-import { dwalletCoordinatorPda, dwalletPda } from './addresses.js';
+import type { GasDepositAccount } from './accounts.js';
+import { dwalletCoordinatorPda, dwalletPda, gasDepositPda } from './addresses.js';
 import { solanaCommitteeReader } from './committee-reader.js';
-import { depositProofMessage, readEncryptionKey } from './instructions.js';
+import {
+	depositProofMessage,
+	FIRST_GAS_DEPOSIT_INCARNATION,
+	readEncryptionKey,
+} from './instructions.js';
 import type { EncryptionKeyEntry } from './instructions.js';
 import { solanaNetworkKeyOutputRecordReader } from './network-key-output.js';
 import { crossCheckedAccountRead } from './read-cross-check.js';
@@ -150,6 +156,14 @@ export abstract class SolanaIkaClientCore<Address> extends IkaClientBase<Address
 		return epoch;
 	}
 
+	/**
+	 * The `incarnation` of the request key's `GasDeposit` account, or
+	 * `undefined` when the key has none. Every request names it.
+	 */
+	protected async depositIncarnation(requestKey: Uint8Array): Promise<bigint | undefined> {
+		return (await this.getGasDeposit(requestKey))?.incarnation;
+	}
+
 	protected requestRecords(): RequestRecordReader {
 		return solanaRequestRecordReader(this.#programId, this.getAccount, this.crossCheck);
 	}
@@ -163,12 +177,43 @@ export abstract class SolanaIkaClientCore<Address> extends IkaClientBase<Address
 		);
 	}
 
+	/**
+	 * The incarnation the next consent names: 1, the first life, except while
+	 * `signGasDepositReopenConsent` signs.
+	 */
+	#consentIncarnation: bigint = FIRST_GAS_DEPOSIT_INCARNATION;
+
 	protected gasDepositConsentMessage(depositOwner: Address): Uint8Array {
 		return depositProofMessage(
 			this.chainNumber,
 			this.networkValue,
 			this.addressBytes(depositOwner),
+			this.#consentIncarnation,
 		);
+	}
+
+	/**
+	 * The request key's consent to reopen its closed gas deposit as life
+	 * `incarnation`, the deposit's incarnation plus one, owned by
+	 * `depositOwner`: what `IkaTransaction.createFundedGasDeposit` takes as
+	 * `consented` for a reopen. A consent opens exactly one life, so the
+	 * consent of a life that ended does not reopen the deposit.
+	 * `signGasDepositConsent` signs the first life's.
+	 */
+	signGasDepositReopenConsent(
+		params: Parameters<IkaClientBase<Address, Address>['signGasDepositConsent']>[0] & {
+			incarnation: bigint;
+		},
+	): { requestPublicKey: Uint8Array; consent: Uint8Array } {
+		this.#consentIncarnation = params.incarnation;
+		try {
+			return this.signGasDepositConsent({
+				requestKey: params.requestKey,
+				depositOwner: params.depositOwner,
+			});
+		} finally {
+			this.#consentIncarnation = FIRST_GAS_DEPOSIT_INCARNATION;
+		}
 	}
 
 	protected voucherBytes(voucher: Address): Uint8Array {
@@ -265,6 +310,17 @@ export abstract class SolanaIkaClientCore<Address> extends IkaClientBase<Address
 			throw new Error(`the program ${String(this.programId)} has no coordinator account`);
 		}
 		return coordinator;
+	}
+
+	/**
+	 * The gas deposit of `requestPublicKey`, or `null` when it has none: its
+	 * balances, debts, counters, owner, and whether a withdrawal is pending.
+	 * The two minimums the network sets for every deposit are on the
+	 * coordinator (`getDWalletCoordinator`).
+	 */
+	async getGasDeposit(requestPublicKey: Uint8Array): Promise<GasDepositAccount | null> {
+		const account = await this.getAccount(gasDepositPda(this.#programId, requestPublicKey).address);
+		return account === null ? null : readGasDeposit(account.data);
 	}
 
 	// ── Vouchers ───────────────────────────────────────────────────────────

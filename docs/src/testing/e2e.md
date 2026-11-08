@@ -13,7 +13,7 @@ and the SDK runs in mock mode, because the network is the mock.
 | | |
 |---|---|
 | Solana cluster | devnet, `https://api.devnet.solana.com` |
-| ika program | `CqGtQgrYFUhobuknomFNntwoxCgKGkBRUtemgdPuM9qT` |
+| ika program | `8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv` |
 | ika gRPC-Web | `https://solana-alpha-dev-1.ika-network.net` |
 
 What you need:
@@ -31,7 +31,7 @@ What you need:
 
    A program built without the feature refuses the pre-alpha's dWallets.
 3. **The SDK in mock mode.** Wrap the client's options in `withMockCryptography` from
-   `@ika.xyz/sdk-core/mock`.
+   `@ika.xyz/pre-alpha-core/mock`.
 
 The public devnet RPC limits how fast you can read. A full run reads accounts often while it
 waits for the network, and can be refused with HTTP 429. Use your own RPC endpoint, or retry

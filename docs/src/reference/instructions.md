@@ -35,7 +35,6 @@ Three kinds of signer send dWallet instructions.
 | 138 | `SettleGas` | the network |
 | 140 | `CommitSignature` | the network |
 | 141 | `RequestWithdraw` | the deposit's owner |
-| 142 | `Withdraw` | the deposit's owner, with a release the network signed |
 | 143 | `Initialize` | the program's upgrade authority, once at deployment |
 | 144 | `AdvanceEpoch` | the network |
 | 145 | `SettleGasWithoutDelivery` | the network |
@@ -55,9 +54,13 @@ Three kinds of signer send dWallet instructions.
 | 164 | `SetChainIdentifier` | the network |
 | 165 | `AcceptEncryptedUserShare` | anyone, with a signature from the holder |
 | 166 | `TransferGasDeposit` | the deposit's owner |
+| 167 | `SettleGasWithdrawal` | the network |
+| 168 | `SetMinFirstDeposit` | the network |
+| 169 | `SetMinBalance` | the network |
+| 170 | `SetDepositFee` | the network |
 | 228 | `EmitEvent` | the program itself, to emit an event |
 
-Numbers 128, 133, 139, 146, 154, 155, 160 and 162 belonged to instructions that were removed.
+Numbers 128, 133, 139, 142, 146, 154, 155, 160 and 162 belonged to instructions that were removed.
 They are refused, and they are never given to another instruction.
 
 ## Signer mode and program mode
@@ -184,13 +187,21 @@ signature, checked by the Ed25519 precompile in an earlier instruction of the sa
 The signed message is:
 
 ```text
-version (u16, 1) || "ika_protocol::gas::proof_of_possession" || chain_number (u32) ||
-network (u8) || 32 || the signer's address (32)
+version (u16, 2) || "ika_protocol::gas::proof_of_possession" || chain_number (u32) ||
+network (u8) || 32 || the signer's address (32) || incarnation (u64)
 ```
+
+The incarnation is the life the instruction opens: 1 for a new deposit, and the closed deposit's
+incarnation plus one for a reopen. So the proof of a life that ended does not reopen the deposit.
 
 All integers are little-endian. The chain number and the network are the coordinator's. The
 signer is account 0, the wallet that creates the deposit. It becomes the deposit's owner, the
 only key that can withdraw. A paused coordinator refuses the instruction (`Paused`, 4030).
+
+The same instruction reopens a closed deposit, with the same data and accounts. A payout that paid
+everything closes the deposit and keeps its account. A create on it opens the deposit's next life:
+the signer becomes the owner, `incarnation` goes up by one, and no rent is paid. A deposit that is
+open, or whose withdrawal is pending, is refused with `AccountAlreadyInitialized`.
 
 Data, 97 bytes:
 
@@ -211,13 +222,21 @@ Accounts:
 | 4 | system_program | no | no |
 | 5 | instructions sysvar | no | no |
 
-`createDepositInstructions` in `@ika.xyz/sdk-solana/instructions` builds the precompile
+After those come the payer's IKA token account and the treasury vault (both writable), the token
+program, the event authority, the program, and last the deposit fee recipient (writable). While a
+fee is set, the recipient must be the coordinator's (`InvalidDepositFeeRecipient`, 4083). The fee
+comes out of `sol_amount`, and the rest is credited. A `sol_amount` below the fee is refused
+(`BelowDepositFee`, 4082).
+
+`createDepositInstructions` in `@ika.xyz/pre-alpha-solana/instructions` builds the precompile
 instruction and this one, in order.
 
 ### TopUp (137)
 
-Adds IKA, SOL, or both to a deposit. Anyone may top up any deposit. A top-up that moves
-nothing is refused (`EmptyTopUp`, 4038).
+Adds IKA, SOL, or both to a deposit. Anyone may top up any deposit that is not closed
+(`DepositClosed`, 4080); a deposit whose withdrawal is pending accepts it. A top-up that moves
+nothing is refused (`EmptyTopUp`, 4038). Each coin's amount must be zero or at least the
+coordinator's minimum balance in that coin (`BelowMinimumTopUp`, 4078).
 
 Data, 16 bytes: `ika_amount` (u64), then `sol_amount` (u64).
 
@@ -232,41 +251,67 @@ Accounts:
 | 4 | token_program | no | no | The SPL Token program |
 | 5 | payer | yes | yes | Pays the SOL and owns the token account |
 | 6 | system_program | no | no | The system program |
+| 7 | event_authority | no | no | Emits `GasDeposited` |
+| 8 | program | no | no | This program |
+| 9 | fee_recipient | yes | no | The coordinator's deposit fee recipient, paid the deposit fee out of `sol_amount`, which credits the rest. Any writable account when no fee is set; another while a fee is set is refused (`InvalidDepositFeeRecipient`, 4083). A `sol_amount` below the fee is refused (`BelowDepositFee`, 4082), and one that is only the fee is an empty top-up (`EmptyTopUp`) |
 
-### RequestWithdraw (141) and Withdraw (142)
+### RequestWithdraw (141)
 
-A deposit's owner takes its unspent funds back in two steps. `RequestWithdraw` records the
-amounts. `Withdraw` pays them out, once the network has signed a release for that request. Both
-refuse any signer but the owner, the request key included, with `AuthorityMismatch` (4004). The
-owner may be a program's address that signs through `invoke_signed`. A program that claims by CPI
-puts the precompile just before its own instruction in the transaction.
+A deposit's owner asks for the whole deposit back. The request carries no amount. It names the
+token account the IKA is paid to. The network then pays the withdrawal with its own transaction,
+`SettleGasWithdrawal` (167), and the owner sends nothing more. See
+[Gas Deposits](../on-chain/gas-deposits.md) for the payout.
 
-`RequestWithdraw` data, 16 bytes: `ika_amount` (u64), then `sol_amount` (u64). Accounts: the
-owner (signer), the deposit (writable), the coordinator.
+The program refuses any signer but the owner, the request key included, with
+`AuthorityMismatch` (4004). The owner may be a program's address that signs through
+`invoke_signed`. The IKA destination must be an initialized, unfrozen SPL token account of the
+IKA mint, or the request is refused with `InvalidIkaDestination` (4077).
 
-`Withdraw` data, 72 bytes: `withdrawal_sequence` (u64), then the network's signature (64).
-Accounts, in order: the owner (signer, writable; it receives the SOL), the deposit (writable),
-the coordinator, the IKA token account the owner names (writable; it receives the IKA), the
-treasury vault (writable), the vault
-authority `["vault_authority"]`, the SPL Token program, the network key's
-`NetworkEncryptionKey`, and the instructions sysvar. An Ed25519 precompile instruction with the
-network's signature must come right before it. The signed release is:
+A request is final. There is no cancel, and a second request while one is pending is refused
+with `WithdrawalAlreadyPending` (4076). A closed deposit is refused with `DepositClosed` (4080),
+and a request for another incarnation than the deposit's with `GasDepositIncarnationMismatch`
+(4081). The payout that pays everything closes the deposit, and the owner reopens it with
+`CreateDeposit`.
+Nothing cancels a pending request: only the network's payout ends it, and a `TransferGasDeposit`
+is refused while it is pending. A pause does not stop a request.
 
-```text
-0xFF || "solana-gas-release" || program_id (32) || gas_deposit (32) || user_pubkey (32) ||
-withdrawal_sequence (u64) || ika_amount (u64) || sol_amount (u64)
-```
+The request sets the deposit's pending flag and records the IKA destination. It advances the
+deposit's `withdrawal_sequence` and its `sequence`, and emits `GasWithdrawalRequested` (128).
 
-The mock network charges nothing and signs no release. On the devnet pre-alpha, a deposit's
-funds stay where they are.
+Data, 8 bytes: `incarnation` (u64, little-endian), the deposit's life the request is for. Any
+other length is refused with `InvalidInstructionData`.
+
+Accounts:
+
+| # | Account | Writable | Signer | Meaning |
+|---|---|---|---|---|
+| 0 | owner | no | yes | The deposit's owner. The payout sends the SOL to it |
+| 1 | gas_deposit | yes | no | The deposit |
+| 2 | coordinator | no | no | Names the IKA mint and the epoch |
+| 3 | ika_destination | no | no | The token account the IKA is paid to |
+| 4 | event authority, `["__event_authority"]` | no | no | Signs the event's self-invocation |
+| 5 | the ika program | no | no | The target of that self-invocation |
+
+The mock network pays no withdrawal. On the devnet pre-alpha, a request stays pending, and the
+deposit's funds stay where they are.
 
 ### TransferGasDeposit (166)
 
 The deposit's owner names a new owner. A zero owner is refused with `InvalidAuthority`, and any
-other signer with `AuthorityMismatch` (4004). It advances the deposit's `sequence` and emits
-`GasDepositTransferred` (126). A pause does not stop it.
+other signer with `AuthorityMismatch` (4004). A pause does not stop it.
 
-Data, 32 bytes: `new_owner` (32). Accounts, in order: the owner (signer), the deposit (writable),
+A transfer is refused while a withdrawal request is pending, with
+`TransferWhileWithdrawalPending` (4079). A request is final: the payout sends the SOL to the owner
+and the IKA to the token account the request recorded, and only that payout ends the request. The
+owner can transfer the deposit again once the payout has landed. A transfer leaves the pending
+flag and `withdrawal_sequence` unchanged.
+
+A closed deposit is refused with `DepositClosed` (4080), and a transfer for another incarnation
+than the deposit's with `GasDepositIncarnationMismatch` (4081).
+
+Every transfer advances the deposit's `sequence` and emits `GasDepositTransferred` (126).
+
+Data, 40 bytes: `new_owner` (32), `incarnation` (8, little-endian). Accounts, in order: the owner (signer), the deposit (writable),
 the event authority, the program.
 
 ## Encryption keys and shares
@@ -354,6 +399,10 @@ their effects on chain.
 | 150 | `SettleGasCharge` | A `GasCharge` record, and the charge |
 | 163 | `CommitPartialUserSignature` | Step 1's result into a `FutureSignatureVoucher` |
 | 164 | `SetChainIdentifier` | A new chain identifier that applies at the next epoch |
+| 167 | `SettleGasWithdrawal` | A deposit's pending withdrawal: takes the withdrawal's charge first, then pays what is left, the SOL to the owner and the IKA to the recorded destination. Writes a `GasWithdrawalCharge` record |
+| 168 | `SetMinFirstDeposit` | The coordinator's minimum first deposit, in IKA and in SOL. `CreateDeposit` and every `TopUp` must leave the deposit's balance net of debt at or above it |
+| 169 | `SetMinBalance` | The coordinator's minimum balance to start a new action. The network refuses a new request against a deposit below it. Each coin a `TopUp` adds must be zero or at least it |
+| 170 | `SetDepositFee` | The coordinator's deposit fee in lamports, which every `CreateDeposit` and `TopUp` pays out of its `sol_amount`, and its recipient, the network-owned address that sent it |
 
 A network instruction is valid only when it is signed by an active network key's
 `noa_public_key`. On the devnet pre-alpha, the mock holds the one network key and sends these

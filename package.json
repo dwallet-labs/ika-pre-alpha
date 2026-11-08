@@ -8,9 +8,9 @@
 		"pnpm": ">=10.0.0"
 	},
 	"scripts": {
-		"build": "pnpm --filter @ika.xyz/sdk-core build && pnpm --filter @ika.xyz/sdk-solana build",
-		"test": "pnpm --filter @ika.xyz/sdk-core test && pnpm --filter @ika.xyz/sdk-solana test",
-		"typecheck": "pnpm --filter @ika.xyz/sdk-solana typecheck && pnpm --filter @ika/solana-examples typecheck"
+		"build": "pnpm --filter @ika.xyz/pre-alpha-core build && pnpm --filter @ika.xyz/pre-alpha-solana build",
+		"test": "pnpm --filter @ika.xyz/pre-alpha-core test && pnpm --filter @ika.xyz/pre-alpha-solana test",
+		"typecheck": "pnpm --filter @ika.xyz/pre-alpha-solana typecheck && pnpm --filter @ika/solana-examples typecheck"
 	},
 	"devDependencies": {
 		"@types/node": "^24.13.3",

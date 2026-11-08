@@ -167,7 +167,7 @@ export interface IkaClientBaseOptions {
 	/**
 	 * Run the SDK's slow computations in a worker, so that they do not freeze
 	 * a browser page: `true` for the SDK's own worker, or a worker you made
-	 * from `@ika.xyz/sdk-core/wasm-worker`. The setting is for the whole page
+	 * from `@ika.xyz/pre-alpha-core/wasm-worker`. The setting is for the whole page
 	 * or process, as `useWasmWorker`, which it calls, and it takes effect from
 	 * this constructor on. Keys derived before it was set were computed on the
 	 * calling thread: call `useWasmWorker()` at startup to move those too.
@@ -180,7 +180,7 @@ export interface IkaClientBaseOptions {
 	 * For a mock ika network, one backend that holds an ordinary key for each
 	 * dWallet as the Solana devnet pre-alpha runs,
 	 * create the client with `withMockCryptography` from
-	 * `@ika.xyz/sdk-core/mock`. The client then skips its 2PC-MPC
+	 * `@ika.xyz/pre-alpha-core/mock`. The client then skips its 2PC-MPC
 	 * computations, and keeps every other check.
 	 *
 	 * NOT SECURE. The backend holds the whole key of every dWallet, so it can
@@ -211,7 +211,7 @@ export abstract class IkaClientBase<Address, VoucherId> {
 
 	/**
 	 * `grpcClient` is the class that makes the connection from an endpoint:
-	 * `DWalletGrpcClient` from `@ika.xyz/sdk-core/auto`, which a chain's
+	 * `DWalletGrpcClient` from `@ika.xyz/pre-alpha-core/auto`, which a chain's
 	 * package imports, so that a browser bundle gets the gRPC-Web client and
 	 * Node the Node client.
 	 */
@@ -257,6 +257,13 @@ export abstract class IkaClientBase<Address, VoucherId> {
 	 * after every session of the old one is settled on the chain.
 	 */
 	protected abstract chainEpoch(): Promise<bigint>;
+
+	/**
+	 * The life (`incarnation`) of the gas deposit of `requestKey` on the
+	 * chain, or `undefined` when the key has none. Every request names the
+	 * life this read shows, read just before it is signed.
+	 */
+	protected abstract depositIncarnation(requestKey: Uint8Array): Promise<bigint | undefined>;
 
 	/**
 	 * The chain's reads that find a request's session once its epoch closed
@@ -341,6 +348,7 @@ export abstract class IkaClientBase<Address, VoucherId> {
 			network: this.network,
 			records,
 			chainEpoch: () => this.chainEpoch(),
+			depositIncarnation: (requestKey) => this.depositIncarnation(requestKey),
 			requestRecords: this.requestRecords(),
 			shares: (trusted) => this.#shareReader(trusted),
 			cryptography: this.cryptography,
@@ -1017,12 +1025,12 @@ const IN_NODE =
 	typeof (globalThis as { process?: { versions?: { node?: string } } }).process?.versions?.node ===
 	'string';
 
-/** The `DWalletGrpcClient` class of `@ika.xyz/sdk-core/auto`. */
+/** The `DWalletGrpcClient` class of `@ika.xyz/pre-alpha-core/auto`. */
 export type GrpcClientClass = typeof DWalletGrpcClient;
 
 /**
  * `grpc` as a client: itself when it is one, or else a `GrpcClient` for the
- * endpoint. `@ika.xyz/sdk-core/auto` is the Node client in Node and the
+ * endpoint. `@ika.xyz/pre-alpha-core/auto` is the Node client in Node and the
  * gRPC-Web client in a browser bundle. Only the Node client takes the
  * committee reader.
  */

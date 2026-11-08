@@ -29,8 +29,8 @@ import {
 	VersionedEncryptedUserKeyShareAttestationBcs,
 	VersionedPartialUserSignatureAttestationBcs,
 	VersionedPublicUserKeyShareAttestationBcs,
-} from '@ika.xyz/sdk-core';
-import type { PartialSignatureAttestationFields } from '@ika.xyz/sdk-core';
+} from '@ika.xyz/pre-alpha-core';
+import type { PartialSignatureAttestationFields } from '@ika.xyz/pre-alpha-core';
 
 import { approvalMessageDigests } from './addresses.js';
 import {
@@ -134,6 +134,24 @@ export function readDWalletCoordinator(data: Uint8Array): {
 	ikaMint: Uint8Array;
 	/** The token account a gas deposit's IKA goes to; a top-up names it. */
 	treasuryVault: Uint8Array;
+	/**
+	 * What a create and every top-up must leave in a gas deposit, net of its
+	 * debt, in each coin. The program refuses less (`BelowMinimumDeposit`).
+	 */
+	minFirstDeposit: GasDepositMinimum;
+	/**
+	 * What a gas deposit must hold, net of its debt, in each coin, for the
+	 * validators to accept a new request on it. The program also refuses a
+	 * top-up whose amount in a coin is above zero and below it
+	 * (`BelowMinimumTopUp`).
+	 */
+	minBalance: GasDepositMinimum;
+	/**
+	 * The fee in lamports every create and top-up pays, on top of what it
+	 * deposits, to `recipient`, and the protocol version that set it. Zero is
+	 * no fee.
+	 */
+	depositFee: { sol: bigint; recipient: Uint8Array; protocolVersion: bigint };
 } | null {
 	if (!isAccount(data, 'DWalletCoordinator')) {
 		return null;
@@ -145,12 +163,42 @@ export function readDWalletCoordinator(data: Uint8Array): {
 		// The chain number at 569, four little-endian bytes, after every
 		// field the account held before it.
 		chainNumber: new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(569, true),
-		// The network at 630, the account's last byte.
+		// The network at 630, right after the chain number.
 		network: data[630],
 		chainIdentifier: data.slice(117, 117 + length),
 		ikaMint: data.slice(20, 52),
 		treasuryVault: data.slice(52, 84),
+		// The two minimums at 631 and 655, each the IKA amount, the lamports
+		// and the protocol version that set them, appended after the network.
+		minFirstDeposit: {
+			ika: readU64(data, 631),
+			sol: readU64(data, 639),
+			protocolVersion: readU64(data, 647),
+		},
+		minBalance: {
+			ika: readU64(data, 655),
+			sol: readU64(data, 663),
+			protocolVersion: readU64(data, 671),
+		},
+		// The deposit fee at 679, its recipient at 687 and its version at
+		// 719, appended after the minimums.
+		depositFee: {
+			sol: readU64(data, 679),
+			recipient: data.slice(687, 719),
+			protocolVersion: readU64(data, 719),
+		},
 	};
+}
+
+/**
+ * A minimum the network sets for every gas deposit: IKA in base units
+ * (10^-8 IKA), SOL in lamports, and the protocol version that set it. Zero in a coin is no
+ * minimum in that coin, and the version is zero before the network set it.
+ */
+export interface GasDepositMinimum {
+	ika: bigint;
+	sol: bigint;
+	protocolVersion: bigint;
 }
 
 export interface DWalletAccount {
@@ -285,11 +333,10 @@ export interface GasDepositAccount {
 	userPublicKey: Uint8Array;
 	ikaBalance: bigint;
 	solBalance: bigint;
-	pendingIkaWithdrawal: bigint;
-	pendingSolWithdrawal: bigint;
 	/**
-	 * Release counter advanced by withdrawal requests and successful claims.
-	 * Top-ups and settlements leave it unchanged.
+	 * Withdrawal counter: each request advances it, and so does a transfer
+	 * that cancels one. The payout, top-ups and settlements leave it
+	 * unchanged.
 	 */
 	withdrawalSequence: bigint;
 	ikaDebt: bigint;
@@ -297,10 +344,29 @@ export interface GasDepositAccount {
 	sequence: bigint;
 	/**
 	 * The deposit's owner: the wallet that opened it, or the owner a
-	 * `TransferGasDeposit` named since. Only its signature requests and
-	 * claims a withdrawal. The transport key only pays for requests.
+	 * `TransferGasDeposit` named since. Only its signature requests a
+	 * withdrawal, and the payout sends the SOL to it. The transport key only
+	 * pays for requests.
 	 */
 	owner: Uint8Array;
+	/**
+	 * Whether a withdrawal request waits for the network's payout. A request
+	 * is for the whole deposit, so it carries no amount.
+	 */
+	withdrawalPending: boolean;
+	/** The token account the pending request's IKA is paid to; zeros when none is pending. */
+	ikaDestination: Uint8Array;
+	/**
+	 * The deposit's life, counted from 1 at the first create; each reopen adds
+	 * one. A withdrawal request and a transfer name it.
+	 */
+	incarnation: bigint;
+	/**
+	 * Whether a payout that paid everything ended the deposit's life. A closed
+	 * deposit refuses a top-up, a request and a transfer, and only a create
+	 * opens it again.
+	 */
+	closed: boolean;
 }
 
 /**
@@ -319,13 +385,15 @@ export function readGasDeposit(data: Uint8Array): GasDepositAccount | null {
 		userPublicKey: data.subarray(2, 34),
 		ikaBalance: readU64(data, 34),
 		solBalance: readU64(data, 42),
-		pendingIkaWithdrawal: readU64(data, 82),
-		pendingSolWithdrawal: readU64(data, 90),
-		withdrawalSequence: readU64(data, 98),
-		ikaDebt: readU64(data, 123),
-		solDebt: readU64(data, 131),
-		sequence: readU64(data, 139),
-		owner: data.subarray(147, 179),
+		withdrawalSequence: readU64(data, 82),
+		ikaDebt: readU64(data, 107),
+		solDebt: readU64(data, 115),
+		sequence: readU64(data, 123),
+		owner: data.subarray(131, 163),
+		withdrawalPending: data[163] !== 0,
+		ikaDestination: data.subarray(164, 196),
+		incarnation: readU64(data, 196),
+		closed: data[204] !== 0,
 	};
 }
 
@@ -485,7 +553,7 @@ export interface ExpectedVoucherSignature {
  * verifies and throws when it does not. The caller binds what the signature
  * is verified against: the dWallet's public output it already checked, the
  * curve, the scheme, the message and the metadata. A caller of
- * `@ika.xyz/sdk-core` passes a function that calls `verifySignatureWithScheme`.
+ * `@ika.xyz/pre-alpha-core` passes a function that calls `verifySignatureWithScheme`.
  */
 export type VoucherSignatureVerifier = (signature: Uint8Array) => Promise<void>;
 
@@ -497,12 +565,15 @@ function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
  * The signature a voucher holds, after it verifies, or the empty signature
  * when the voucher holds none. Throws when the voucher is not for the
  * expected dWallet, message, metadata or scheme, and when the signature does
- * not verify.
+ * not verify. Also throws when the voucher's status is `signedStatus` but it
+ * holds no signature: the program writes the signature and that status
+ * together, so only a bad RPC serves such an account.
  */
 async function voucherSignatureVerified(
 	voucher: SignatureVoucherAccount | FutureSignatureVoucherAccount,
 	expected: ExpectedVoucherSignature,
 	verifySignature: VoucherSignatureVerifier,
+	signedStatus: number,
 ): Promise<Uint8Array> {
 	const { messageDigest, messageMetadataDigest } = approvalMessageDigests(
 		expected.message,
@@ -521,6 +592,9 @@ async function voucherSignatureVerified(
 		throw new Error('the voucher is for another signature scheme than the expected one');
 	}
 	if (voucher.signature.length === 0) {
+		if (voucher.status === signedStatus) {
+			throw new Error('the voucher is signed but holds no signature');
+		}
 		return voucher.signature;
 	}
 	await verifySignature(voucher.signature);
@@ -536,7 +610,8 @@ async function voucherSignatureVerified(
  * and `signatureScheme` to be the expected ones, with the digests computed
  * from the expected message and metadata by `approvalMessageDigests`, and
  * throws otherwise. It returns `null` for data that is not a voucher. The
- * account's `signature` is empty while the voucher holds none. Otherwise the
+ * account's `signature` is empty while the voucher holds none. A voucher whose
+ * status is `SIGNED` with an empty `signature` is refused. Otherwise the
  * read calls `verifySignature` and returns the account only when that
  * resolves; it throws what that throws. The other fields are as the RPC
  * served them.
@@ -559,7 +634,12 @@ export async function readSignatureVoucherVerified(
 	}
 	return {
 		...voucher,
-		signature: await voucherSignatureVerified(voucher, expected, verifySignature),
+		signature: await voucherSignatureVerified(
+			voucher,
+			expected,
+			verifySignature,
+			SIGNATURE_VOUCHER_SIGNED,
+		),
 	};
 }
 
@@ -571,8 +651,9 @@ export async function readSignatureVoucherVerified(
  * voucher's fields of the same names. It throws when the voucher is not for
  * the expected dWallet, message, metadata or scheme, and when the signature
  * does not verify. It returns `null` for data that is not a future voucher.
- * The account's `signature` is empty while the voucher holds none. The other
- * fields, the attestation among them, are as the RPC served them. Like
+ * The account's `signature` is empty while the voucher holds none, and a
+ * voucher whose status is `SIGNED` with an empty `signature` is refused. The
+ * other fields, the attestation among them, are as the RPC served them. Like
  * `readSignatureVoucherVerified`, the read decodes a copy of `data` made on
  * entry, so every field it returns is detached from the caller's buffer.
  */
@@ -587,7 +668,12 @@ export async function readFutureSignatureVoucherVerified(
 	}
 	return {
 		...voucher,
-		signature: await voucherSignatureVerified(voucher, expected, verifySignature),
+		signature: await voucherSignatureVerified(
+			voucher,
+			expected,
+			verifySignature,
+			FUTURE_SIGNATURE_VOUCHER_SIGNED,
+		),
 	};
 }
 

@@ -5,13 +5,13 @@
  * What the page asks the ika network, through the SDK, as a browser app
  * asks it.
  *
- * `IkaClient` from `@ika.xyz/sdk-solana/web3` sends the requests and reads
+ * `IkaClient` from `@ika.xyz/pre-alpha-solana/web3` sends the requests and reads
  * the ika program's accounts. In a browser it talks gRPC-Web, through
  * `fetch`, to the network's gRPC-Web endpoint. `IkaTransaction` adds the
  * program's instructions to a transaction the connected wallet signs.
  *
  * The Solana devnet pre-alpha runs on a mock ika network, so the client is
- * in mock mode (`withMockCryptography` from `@ika.xyz/sdk-core/mock`). Mock
+ * in mock mode (`withMockCryptography` from `@ika.xyz/pre-alpha-core/mock`). Mock
  * mode skips the user's half of the 2PC-MPC computation and keeps every
  * other check. Against the real network, build the client without it.
  *
@@ -30,16 +30,16 @@
  * A real app keeps the root seed, encrypted, or derives it from something
  * the user holds.
  */
-import { withMockCryptography } from '@ika.xyz/sdk-core/mock';
-import { DWalletGrpcClient } from '@ika.xyz/sdk-core/web';
-import { dwalletCoordinatorPda, readDWalletCoordinator } from '@ika.xyz/sdk-solana';
+import { withMockCryptography } from '@ika.xyz/pre-alpha-core/mock';
+import { DWalletGrpcClient } from '@ika.xyz/pre-alpha-core/web';
+import { dwalletCoordinatorPda, readDWalletCoordinator } from '@ika.xyz/pre-alpha-solana';
 import {
 	Curve,
 	Hash,
 	IkaClient,
 	SignatureAlgorithm,
 	UserShareEncryptionKeys,
-} from '@ika.xyz/sdk-solana/web3';
+} from '@ika.xyz/pre-alpha-solana/web3';
 import { Connection, PublicKey } from '@solana/web3.js';
 
 /** The curve this demo uses. */

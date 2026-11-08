@@ -30,7 +30,8 @@ Each CPI crate exports `ID`, the ika program's address on the network it was bui
 
 | Feature | Network |
 | --- | --- |
-| `devnet-pre-alpha` | the Solana devnet pre-alpha, ika program `CqGtQgrYFUhobuknomFNntwoxCgKGkBRUtemgdPuM9qT` |
+| `devnet-pre-alpha` | the Solana devnet pre-alpha, ika program `8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv` |
+| `localnet` | a local validator running the localnet ika program, as a local mock does |
 | none | the test suites only, which load the ika program at a fixed development address |
 
 ```bash

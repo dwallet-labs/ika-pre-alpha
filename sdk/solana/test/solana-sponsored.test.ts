@@ -8,7 +8,7 @@
  * app's own `RequestKey` as the client's request signer, the requests and the
  * vouchers name the app's key.
  */
-import { createDepositInstructions, depositProofMessage } from '@ika.xyz/sdk-solana/instructions';
+import { createDepositInstructions, depositProofMessage } from '@ika.xyz/pre-alpha-solana/instructions';
 import { ed25519 } from '@noble/curves/ed25519.js';
 import { Connection, Ed25519Program, Keypair, PublicKey } from '@solana/web3.js';
 import { describe, expect, it } from 'vitest';

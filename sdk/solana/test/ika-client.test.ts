@@ -8,8 +8,8 @@
  * last saw. With two, the sign's connection would go on naming an epoch the
  * presign's had already left.
  */
-import { Curve } from '@ika.xyz/sdk-core';
-import type { NetworkKeyOutputRecordReader } from '@ika.xyz/sdk-core';
+import { Curve } from '@ika.xyz/pre-alpha-core';
+import type { NetworkKeyOutputRecordReader } from '@ika.xyz/pre-alpha-core';
 import { Connection, Keypair } from '@solana/web3.js';
 import { describe, expect, it } from 'vitest';
 

@@ -25,14 +25,15 @@ tell you which type an account is. The tag does.
 
 | Account | Tag | Length in bytes | Address |
 |---|---|---|---|
-| `DWalletCoordinator` | 96 | 631 | `["dwallet_coordinator"]` |
+| `DWalletCoordinator` | 96 | 727 | `["dwallet_coordinator"]` |
 | `DWallet` | 97 | 185 | see [The dWallet's address](#the-dwallets-address) |
 | `NetworkEncryptionKey` | 98 | 199 | `["network_encryption_key", noa_public_key]` |
-| `GasDeposit` | 99 | 179 | `["gas_deposit", user_pubkey]` |
+| `GasDeposit` | 99 | 205 | `["gas_deposit", user_pubkey]` |
 | `EncryptedUserSecretKeyShare` | 101 | header 214 | `["dwallet", "encrypted_user_share", root, holder]` |
 | `NetworkReconfigurationOutput` | 102 | 182 | `["network_reconfig", noa_public_key, epoch_le]` |
 | `DWalletAttestation` | 104 | header 101 | see [Attestation accounts](#dwalletattestation-tag-104) |
 | `GasCharge` | 106 | 91 | `["gas_charge", charge_id]` |
+| `GasWithdrawalCharge` | 112 | 67 | `["gas_withdrawal_charge", user_pubkey, withdrawal_sequence_le]` |
 | `EncryptionKey` | 107 | header 120 | `["encryption_key", signer_public_key, curve_le]` |
 | `SignatureVoucher` | 108 | 304 | none: a fresh address the issuer picks |
 | `FutureSignatureVoucher` | 109 | 1941 | none: a fresh address the issuer picks |
@@ -91,6 +92,12 @@ and this deployment's fixed values.
 | 614 | `pending_chain_identifier_effective_epoch` | 8 | The epoch the waiting identifier applies at |
 | 622 | `chain_identifier_protocol_version` | 8 | The protocol version that last set a waiting identifier |
 | 630 | `network` | 1 | 1 mainnet, 2 testnet, 3 a local or test network |
+| 631 | `min_first_deposit_ika` | 8 | The minimum first deposit in IKA's smallest unit. `CreateDeposit` and every `TopUp` must leave the balance net of debt at or above it. Zero is no minimum |
+| 639 | `min_first_deposit_sol` | 8 | The same minimum in lamports |
+| 647 | `min_first_deposit_protocol_version` | 8 | The protocol version that last set it. `SetMinFirstDeposit` refuses one not above it |
+| 655 | `min_balance_ika` | 8 | The minimum balance net of debt to start a new action, in IKA's smallest unit. The network enforces it on requests. The program checks only that a `TopUp`'s IKA amount is zero or at least it |
+| 663 | `min_balance_sol` | 8 | The same minimum in lamports |
+| 671 | `min_balance_protocol_version` | 8 | The protocol version that last set it. `SetMinBalance` refuses one not above it |
 
 The paused signing parameters, from offset 165:
 
@@ -167,8 +174,8 @@ One per network key and epoch in which the key was reconfigured.
 ## GasDeposit (tag 99)
 
 One per request key: the Ed25519 key that signs the user's gRPC requests. The wallet that
-creates it owns it (`owner`). Only the owner requests and claims a withdrawal; the request key only
-pays for requests. See [Gas Deposits](../on-chain/gas-deposits.md).
+creates it owns it (`owner`). Only the owner requests a withdrawal, which the network then pays;
+the request key only pays for requests. See [Gas Deposits](../on-chain/gas-deposits.md).
 
 | Offset | Field | Size | Meaning |
 |---|---|---|---|
@@ -179,16 +186,19 @@ pays for requests. See [Gas Deposits](../on-chain/gas-deposits.md).
 | 58 | `total_ika_consumed` | 8 | All IKA ever charged |
 | 66 | `total_sol_deposited` | 8 | All lamports ever added |
 | 74 | `total_sol_consumed` | 8 | All lamports ever charged |
-| 82 | `pending_ika_withdrawal` | 8 | IKA the owner asked to withdraw |
-| 90 | `pending_sol_withdrawal` | 8 | Lamports the owner asked to withdraw |
-| 98 | `withdrawal_sequence` | 8 | Counts withdrawal requests and claims |
-| 106 | `last_settlement_epoch` | 8 | The epoch of the last charge |
-| 114 | `created_epoch` | 8 | The epoch the deposit was created in |
-| 122 | `bump` | 1 | This account's bump |
-| 123 | `ika_debt` | 8 | IKA charged beyond the balance. The next charge takes it first |
-| 131 | `sol_debt` | 8 | Lamports charged beyond the balance |
-| 139 | `sequence` | 8 | Counts every change to the account. 1 at creation |
-| 147 | `owner` | 32 | The deposit's owner: the wallet that signed `CreateDeposit`, or the owner a `TransferGasDeposit` named since |
+| 82 | `withdrawal_sequence` | 8 | Counts withdrawal requests. Nothing else advances it |
+| 90 | `last_settlement_epoch` | 8 | The epoch of the last charge |
+| 98 | `created_epoch` | 8 | The epoch the deposit was created in |
+| 106 | `bump` | 1 | This account's bump |
+| 107 | `ika_debt` | 8 | IKA charged beyond the balance. The next charge takes it first |
+| 115 | `sol_debt` | 8 | Lamports charged beyond the balance |
+| 123 | `sequence` | 8 | Counts every change to the account. 1 at creation |
+| 131 | `owner` | 32 | The deposit's owner: the wallet that signed `CreateDeposit`, or the owner a `TransferGasDeposit` named since |
+| 163 | `withdrawal_pending` | 1 | 1 while a withdrawal request waits for the network's payout |
+| 164 | `ika_destination` | 32 | The token account the pending request's IKA is paid to. Zeros when none is pending |
+
+A request advances `withdrawal_sequence` and `sequence`. The payout, top-ups and charges advance
+only `sequence`.
 
 ## GasCharge (tag 106)
 
@@ -203,6 +213,23 @@ derived from the charge's id, so the same charge is written only once.
 | 74 | `sol_amount` | 8 | The lamports asked for, this record's rent included |
 | 82 | `epoch` | 8 | The epoch of the charge |
 | 90 | `bump` | 1 | This account's bump |
+
+## GasWithdrawalCharge (tag 112)
+
+The record of one withdrawal's charge. Its address is derived from the deposit's request key and
+the withdrawal counter the request was made at. `SettleGasWithdrawal` writes it when it takes the
+withdrawal's charge and pays the deposit out, or when it charges a request that is no longer
+pending. Nothing closes it, so a second payout of the same request is refused. A payout short of
+its charge writes none.
+
+| Offset | Field | Size | Meaning |
+|---|---|---|---|
+| 2 | `user_pubkey` | 32 | The deposit charged |
+| 34 | `withdrawal_sequence` | 8 | The withdrawal counter the request was made at |
+| 42 | `ika_amount` | 8 | The IKA charged |
+| 50 | `sol_amount` | 8 | The lamports charged, this record's rent included |
+| 58 | `epoch` | 8 | The epoch the payout landed in |
+| 66 | `bump` | 1 | This account's bump |
 
 ## SignatureVoucher (tag 108)
 

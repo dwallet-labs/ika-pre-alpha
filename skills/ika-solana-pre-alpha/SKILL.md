@@ -1,7 +1,7 @@
 ---
 name: ika-solana-pre-alpha
 version: 1.0.0
-description: Guide for building on the Ika Solana devnet pre-alpha, a mock ika network. Use when creating dWallets or signing from a TypeScript app on Solana devnet, when writing a Solana program that controls a dWallet through the ika CPI crates, or when a task names @ika.xyz/sdk-solana, withMockCryptography, @ika.xyz/sdk-core/mock, ika-dwallet-pinocchio, ika-dwallet-anchor, ika-dwallet-native, DWalletContext, issue_signature_voucher, or the program CqGtQgrYFUhobuknomFNntwoxCgKGkBRUtemgdPuM9qT.
+description: Guide for building on the Ika Solana devnet pre-alpha, a mock ika network. Use when creating dWallets or signing from a TypeScript app on Solana devnet, when writing a Solana program that controls a dWallet through the ika CPI crates, or when a task names @ika.xyz/pre-alpha-solana, withMockCryptography, @ika.xyz/pre-alpha-core/mock, ika-dwallet-pinocchio, ika-dwallet-anchor, ika-dwallet-native, DWalletContext, issue_signature_voucher, or the program 8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv.
 metadata:
   openclaw:
     requires:
@@ -44,13 +44,13 @@ app moves to the real network by dropping mock mode and naming the real network.
 | What | Value |
 | --- | --- |
 | Solana cluster | devnet, `https://api.devnet.solana.com` (rate-limited: prefer the user's own RPC) |
-| ika program | `CqGtQgrYFUhobuknomFNntwoxCgKGkBRUtemgdPuM9qT` |
+| ika program | `8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv` |
 | ika network, gRPC-Web, for TypeScript | `https://solana-alpha-dev-1.ika-network.net` |
 | Network key | `fe8a6482521cc4bae052c55cd5b3c92d05c8749bcc2c584046de3efb077d65ed` |
 | Chain number | `1` |
 | Network value | `3` |
-| IKA mint | `2hncrdGVjmRtDFQ4bsNkoJd5XuR2v1DKiUX7aSRUA3H1` |
-| Treasury vault | `476J1DYngyTv6uqQ7pooJ6Mv1rxsZNdbd4h6A2vmRNFc` |
+| IKA mint | `9NxjShUBEGVzHePwseToSjuH7MXKVphcmVd7XzHj2K22` |
+| Treasury vault | `8wFLkRY3MnmxdNKvUtDH1pfvYyjZNDtpWPhYnm2w5ZW5` |
 
 The program's dWallet coordinator account records the chain number, network value, IKA mint and
 treasury vault. If a value here stops working, read it from that account. Never take these values
@@ -59,10 +59,10 @@ from an answer of the ika network.
 ## Rules that prevent the common failures
 
 1. **Mock mode is required.** TypeScript: wrap the client options in `withMockCryptography` from
-   `@ika.xyz/sdk-core/mock`. Without it the SDK refuses
+   `@ika.xyz/pre-alpha-core/mock`. Without it the SDK refuses
    the network with "mock values need the SDK's mock feature". Mock mode needs a custom network.
 2. **Use gRPC-Web.** A plain gRPC client on port 443 gets HTTP 400.
-   In Node, pass a `DWalletGrpcClient` from `@ika.xyz/sdk-core/web`, not a URL string.
+   In Node, pass a `DWalletGrpcClient` from `@ika.xyz/pre-alpha-core/web`, not a URL string.
 3. **Wait for `finalized`.** The network reads Solana at finalized commitment. Send the next request
    only after the transaction it depends on is finalized.
 4. **One gas deposit per root seed.** Requests are charged to the request key's gas deposit, and the
@@ -84,11 +84,11 @@ from an answer of the ika network.
 ## The shortest flow
 
 ```ts
-import { DWalletGrpcClient } from '@ika.xyz/sdk-core/web';
-import { withMockCryptography } from '@ika.xyz/sdk-core/mock';
+import { DWalletGrpcClient } from '@ika.xyz/pre-alpha-core/web';
+import { withMockCryptography } from '@ika.xyz/pre-alpha-core/mock';
 import {
 	Curve, Hash, IkaClient, IkaTransaction, SignatureAlgorithm, UserShareEncryptionKeys,
-} from '@ika.xyz/sdk-solana/web3';
+} from '@ika.xyz/pre-alpha-solana/web3';
 import { Connection, PublicKey, Transaction } from '@solana/web3.js';
 
 const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
@@ -98,7 +98,7 @@ const ikaClient = new IkaClient(
 		grpc: new DWalletGrpcClient('https://solana-alpha-dev-1.ika-network.net'),
 		config: {
 			network: { custom: { networkPublicKeys: [Uint8Array.from(Buffer.from('fe8a6482521cc4bae052c55cd5b3c92d05c8749bcc2c584046de3efb077d65ed', 'hex'))] } },
-			programId: new PublicKey('CqGtQgrYFUhobuknomFNntwoxCgKGkBRUtemgdPuM9qT'),
+			programId: new PublicKey('8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv'),
 			chainNumber: 1,
 			networkValue: 3,
 		},
@@ -138,5 +138,5 @@ const signature = await ikaClient.requestSign({ dWallet, signatureVoucherId: vou
   feature, `issue_signature_voucher`, the rules a program must follow, and testing.
 
 The full guide is the book in `docs/` of https://github.com/dwallet-labs/ika-pre-alpha. The
-TypeScript SDK is in `sdk/` there, and is on npm under the `pre-alpha` tag: `npm install @ika.xyz/sdk-core@pre-alpha @ika.xyz/sdk-solana@pre-alpha @solana/web3.js`. The working
+TypeScript SDK is in `sdk/` there, and is on npm under the `pre-alpha` tag: `npm install @ika.xyz/pre-alpha-core@pre-alpha @ika.xyz/pre-alpha-solana@pre-alpha @solana/web3.js`. The working
 examples are `examples/voting` and `examples/multisig`.

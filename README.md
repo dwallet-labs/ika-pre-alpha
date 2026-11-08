@@ -26,8 +26,8 @@ coding agents.
 
 | Path | What it is |
 | --- | --- |
-| `sdk/core` | `@ika.xyz/sdk-core`: requests to the ika network, the user's keys, the checks of the network's answers, and mock mode (`@ika.xyz/sdk-core/mock`) |
-| `sdk/solana` | `@ika.xyz/sdk-solana`: `IkaClient` and `IkaTransaction` for Solana, the program's addresses, instructions and account readers |
+| `sdk/core` | `@ika.xyz/pre-alpha-core`: requests to the ika network, the user's keys, the checks of the network's answers, and mock mode (`@ika.xyz/pre-alpha-core/mock`) |
+| `sdk/solana` | `@ika.xyz/pre-alpha-solana`: `IkaClient` and `IkaTransaction` for Solana, the program's addresses, instructions and account readers |
 | `crates/ika-dwallet-pinocchio` | CPI crate for Pinocchio programs |
 | `crates/ika-dwallet-native` | CPI crate for `solana-program` programs |
 | `crates/ika-dwallet-anchor` | CPI crate for Anchor programs |
@@ -43,7 +43,7 @@ coding agents.
 | What | Value |
 | --- | --- |
 | Solana cluster | devnet, `https://api.devnet.solana.com` |
-| ika program | `CqGtQgrYFUhobuknomFNntwoxCgKGkBRUtemgdPuM9qT` |
+| ika program | `8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv` |
 | ika network, gRPC-Web | `https://solana-alpha-dev-1.ika-network.net` |
 | Network key | `fe8a6482521cc4bae052c55cd5b3c92d05c8749bcc2c584046de3efb077d65ed` |
 | Chain number | `1` |
@@ -56,15 +56,15 @@ Get devnet SOL from <https://faucet.solana.com>. The devnet RPC faucet is closed
 The SDK is on npm under the `pre-alpha` tag:
 
 ```bash
-npm install @ika.xyz/sdk-core@pre-alpha @ika.xyz/sdk-solana@pre-alpha @solana/web3.js
+npm install @ika.xyz/pre-alpha-core@pre-alpha @ika.xyz/pre-alpha-solana@pre-alpha @solana/web3.js
 ```
 
 Then create a client in mock mode, make a dWallet and sign:
 
 ```ts
-import { DWalletGrpcClient } from '@ika.xyz/sdk-core/web';
-import { withMockCryptography } from '@ika.xyz/sdk-core/mock';
-import { Curve, Hash, IkaClient, SignatureAlgorithm } from '@ika.xyz/sdk-solana/web3';
+import { DWalletGrpcClient } from '@ika.xyz/pre-alpha-core/web';
+import { withMockCryptography } from '@ika.xyz/pre-alpha-core/mock';
+import { Curve, Hash, IkaClient, SignatureAlgorithm } from '@ika.xyz/pre-alpha-solana/web3';
 
 const ikaClient = new IkaClient(
 	withMockCryptography({

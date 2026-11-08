@@ -1,4 +1,4 @@
-# @ika.xyz/sdk-solana
+# @ika.xyz/pre-alpha-solana
 
 The Solana part of the ika dWallet network client: the addresses the `ika_protocol` program keeps
 its accounts at, the instruction bytes and account discriminators it answers to, readers for the
@@ -11,7 +11,7 @@ Every number comes from the program's own wire table, by name. The package keeps
 > the docs (`docs/src/introduction.md`) before you build anything.
 
 The requests themselves, and the checks of the network's attestations, are the same on every chain
-and live in `@ika.xyz/sdk-core`.
+and live in `@ika.xyz/pre-alpha-core`.
 
 ## The dWallet SDK
 
@@ -21,11 +21,11 @@ The ika dWallet SDK for the network's request flow on Solana. It has three class
 - `IkaTransaction`: adds the chain's dWallet calls to a transaction the app's wallet signs.
 - `IkaClient`: sends the network's requests, such as create, presign and sign, and reads the chain.
 
-It has two entry points. Import `@ika.xyz/sdk-solana/web3` with `@solana/web3.js`, or
-`@ika.xyz/sdk-solana/kit` with `@solana/kit`. The root, `@ika.xyz/sdk-solana`, needs neither.
+It has two entry points. Import `@ika.xyz/pre-alpha-solana/web3` with `@solana/web3.js`, or
+`@ika.xyz/pre-alpha-solana/kit` with `@solana/kit`. The root, `@ika.xyz/pre-alpha-solana`, needs neither.
 
 The part every chain shares, the request engine and the user's keys, is in
-`@ika.xyz/sdk-core/common`. This package re-exports what an app uses from it.
+`@ika.xyz/pre-alpha-core/common`. This package re-exports what an app uses from it.
 
 ### How requests are paid for
 
@@ -73,7 +73,7 @@ import {
 	IkaTransaction,
 	SignatureAlgorithm,
 	UserShareEncryptionKeys,
-} from '@ika.xyz/sdk-solana/web3';
+} from '@ika.xyz/pre-alpha-solana/web3';
 import { Transaction } from '@solana/web3.js';
 
 const ikaClient = new IkaClient({ connection, grpc: validatorUrl, config: { network, programId } });
@@ -93,8 +93,47 @@ const deposit = new IkaTransaction({
 	owner,
 	userShareEncryptionKeys: keys,
 });
-await deposit.createGasDeposit().topUpGasDeposit({ ikaTokenAccount, ikaAmount, solAmount });
+await deposit.createFundedGasDeposit({ ikaTokenAccount, ikaAmount, solAmount });
+```
 
+The network sets a minimum first deposit on the coordinator (`getDWalletCoordinator().minFirstDeposit`).
+A create and every top-up must leave the deposit, net of its debt, at or above it in each coin.
+`createFundedGasDeposit` and `topUpGasDeposit` read it first and throw `GasDepositBelowMinimumError`,
+which names the minimum, for amounts the program would refuse. A second minimum, `minBalance`, is
+what the validators require before they accept a new request paid from the deposit. Each coin a
+top-up adds must be zero or at least `minBalance` in that coin; `topUpGasDeposit` throws
+`GasTopUpBelowMinimumError`, which names the coin, the amount and the minimum, otherwise.
+`topUpGasDeposit` reads the deposit first and throws for a request key with no deposit, so open a
+deposit with `createFundedGasDeposit`, not with `createGasDeposit().topUpGasDeposit(...)` in one
+transaction. The empty `createGasDeposit()` is accepted only while the minimum first deposit and
+the deposit fee are both zero.
+
+Every create, reopen and top-up also pays the network's deposit fee in SOL
+(`getDWalletCoordinator().depositFee`). The program takes the fee out of the SOL the instruction
+moves and credits the rest. `createFundedGasDeposit` and `topUpGasDeposit` take the amounts to
+CREDIT and add the current fee themselves, so the payer sends `solAmount` plus the fee, a top-up of
+IKA alone sends the fee alone, and the minimums are checked on the credited amounts. The raw
+builders `createDepositInstructions` and `topUpInstruction` take the SOL the instruction moves, fee
+included.
+
+A withdrawal returns the whole deposit. `requestGasWithdrawal({ ikaDestination })` takes no amount,
+and it is final: there is no cancel. The network then pays the deposit out with its own
+transaction, after its charge: the SOL to the owner and the IKA to `ikaDestination`. There is no
+claim step. A payout that pays everything closes the deposit and ends its life, which the deposit's
+`incarnation` counts. `createFundedGasDeposit` on a closed deposit reopens it as its next life: it
+reads the deposit and signs, or takes in `consented`, the proof for the closed deposit's incarnation
+plus one (`IkaClient.signGasDepositReopenConsent`), and it throws `GasDepositAlreadyOpenError` for a
+deposit that is open or pending. `topUpGasDeposit`, `requestGasWithdrawal` and `transferGasDeposit`
+read the deposit and throw `GasDepositClosedError` for a closed one. A request and a transfer name
+the deposit's open life; an `incarnation` passed for another life throws
+`GasDepositIncarnationMismatchError`, as the program would refuse it
+(`GasDepositIncarnationMismatch`, 4081). A top-up names no life, so it lands on whatever life is open
+when it executes. `transferGasDeposit({ newOwner })` hands the deposit to a new owner. A request is
+final, so it throws `TransferWhileWithdrawalPendingError` while a withdrawal is pending, as the
+program would refuse the transfer (`TransferWhileWithdrawalPending`, 4079). `getGasDeposit` reads a deposit, and
+`gasDepositEvents` decodes the program's deposit events from a transaction's inner instructions.
+
+```ts
 const { dWallet } = await ikaClient.requestDWalletDKG({
 	curve,
 	userShareEncryptionKeys: keys,
@@ -136,7 +175,7 @@ const signature = await ikaClient.requestSign({
 
 ### The flow, with `@solana/kit`
 
-`@ika.xyz/sdk-solana/kit` is the same SDK with `@solana/kit` types: every address is a kit
+`@ika.xyz/pre-alpha-solana/kit` is the same SDK with `@solana/kit` types: every address is a kit
 `Address`, `IkaClient` reads through a kit `Rpc`, and `IkaTransaction` returns kit `Instruction`s to
 append to your transaction message. The voucher's keypair signer is attached to its account, and so
 are the owner and the payer when you pass them as signers, so `signTransactionMessageWithSigners`
@@ -144,7 +183,7 @@ signs the whole transaction. The SDK builds the instructions with `@solana/web3.
 package must be installed too, though your code never uses it.
 
 ```ts
-import { IkaClient, IkaTransaction, UserShareEncryptionKeys } from '@ika.xyz/sdk-solana/kit';
+import { IkaClient, IkaTransaction, UserShareEncryptionKeys } from '@ika.xyz/pre-alpha-solana/kit';
 import {
 	appendTransactionMessageInstructions,
 	createSolanaRpc,
@@ -201,7 +240,7 @@ ship on their own. If your bundler does not, make the worker yourself and pass i
 
 ```ts
 useWasmWorker(
-	new Worker(new URL('@ika.xyz/sdk-core/wasm-worker', import.meta.url), { type: 'module' }),
+	new Worker(new URL('@ika.xyz/pre-alpha-core/wasm-worker', import.meta.url), { type: 'module' }),
 );
 ```
 
@@ -250,8 +289,13 @@ the app's.
     backend never sees a share, and it cannot sign anything a dWallet's owner did not approve.
   - **Sponsored per-user deposits.** Each user keeps their own request key. The user's device signs
     its consent with `IkaClient.signGasDepositConsent({ requestKey: keys, depositOwner: app })`; the
-    app creates the deposit with it (`createGasDeposit(consent)`), owns it, and refills it with
+    app creates the deposit with it (`createFundedGasDeposit({ consented: consent, ... })`), owns
+    it, and refills it with
     `topUpGasDeposit({ requestPublicKey })`.
+
+  Either way, a request names the life (`incarnation`) of the deposit at the key that signs it, and
+  the client reads that life from Solana just before it signs. With one app key, that is the app's
+  own deposit.
 
 ```ts
 // The app's backend
@@ -318,10 +362,10 @@ and the instruction builders the SDK's classes call, for an app that builds its 
 
 ### Entry points
 
-- `@ika.xyz/sdk-solana`: the addresses, the account readers, the wire tables, the reader and record
+- `@ika.xyz/pre-alpha-solana`: the addresses, the account readers, the wire tables, the reader and record
   check for the core's ownership check (the reader's `readDWalletAt` reads a dWallet by its account,
   and refuses an account that is not at its own dWallet's derived address, for `readDWalletVerified`
-  of `@ika.xyz/sdk-core`). It also has `solanaCommitteeReader(programId, getAccount, crossCheck, network)`,
+  of `@ika.xyz/pre-alpha-core`). It also has `solanaCommitteeReader(programId, getAccount, crossCheck, network)`,
   the `committeeReader` the core's gRPC client takes. The network signs each epoch's committee, and
   the client pins its TLS connections to the network key of a member of a committee it checked. This
   reader gives the two Solana reads that check uses: the program's `SystemState.epoch`, and whether
@@ -331,7 +375,7 @@ and the instruction builders the SDK's classes call, for an app that builds its 
 - A voucher's signature is read with `readSignatureVoucherVerified(data, expected, verifySignature)`
   or `readFutureSignatureVoucherVerified`. One RPC serves the account, so the read requires the
   voucher to be for the dWallet, the message, the metadata and the scheme in `expected`. It returns
-  the signature only after `verifySignature` accepts it. A caller of `@ika.xyz/sdk-core` passes a
+  the signature only after `verifySignature` accepts it. A caller of `@ika.xyz/pre-alpha-core` passes a
   function that calls `verifySignatureWithScheme` with a dWallet output it already checked.
   `readSignatureVoucherUnverified` and `readFutureSignatureVoucherUnverified` only decode the account.
   They are for uses that need no signature, such as waiting for the status or reading the signing key.
@@ -341,7 +385,7 @@ and the instruction builders the SDK's classes call, for an app that builds its 
   neither. The check decodes the proof, rebuilds the bytes from the fields at the proof's version,
   verifies the network's signature under a trusted key, and requires the attestation to name this
   voucher's address, message digest, metadata digest and signature scheme.
-- `@ika.xyz/sdk-solana/instructions`: the instruction builders, which return `@solana/web3.js`
+- `@ika.xyz/pre-alpha-solana/instructions`: the instruction builders, which return `@solana/web3.js`
   instructions. `@solana/web3.js` is a peer dependency, and only this subpath needs it.
 
 A guide with examples is `docs/src/frameworks/typescript.md`.
@@ -350,14 +394,14 @@ A guide with examples is `docs/src/frameworks/typescript.md`.
 
 Every read that checks a network signature, and every reader of a network key's account, takes the
 network you chose: `'mainnet'`, `'testnet'`, or `{ custom: { networkPublicKeys } }` for a local
-network or any other network (`IkaNetwork` of `@ika.xyz/sdk-core`). Build the trusted keys with
-`trustedNetworkKeys(network)` of `@ika.xyz/sdk-core`.
+network or any other network (`IkaNetwork` of `@ika.xyz/pre-alpha-core`). Build the trusted keys with
+`trustedNetworkKeys(network)` of `@ika.xyz/pre-alpha-core`.
 
 - On mainnet and testnet the SDK trusts only the network keys it lists.
   `readSolanaNetworkKeyOutputVerified`, `solanaNetworkKeyOutputRecordReader` and
   `solanaCommitteeReader` refuse a key the list does not hold, a `NetworkEncryptionKey` account at
   another address than the listed one, and an account that holds another DKG digest. Pass
-  `readEncryptionKey` the chain number `deployedSolanaChainNumber(network)` of `@ika.xyz/sdk-core`
+  `readEncryptionKey` the chain number `deployedSolanaChainNumber(network)` of `@ika.xyz/pre-alpha-core`
   gives, and the network `deployedNetworkValue(network)` gives.
 - On a custom network the SDK checks the reads against no list, and you pass the chain number and
   the network from your own configuration: the fixed number the protocol config gives Solana (1 on
@@ -411,7 +455,7 @@ an import does not read the key you pass: the backend makes a new key for the dW
 dWallet of the pre-alpha has another public key and address than the key you imported, and that key
 never leaves your device.
 
-The mock cryptography is a separate entry, `@ika.xyz/sdk-core/mock`, so add `@ika.xyz/sdk-core` to
+The mock cryptography is a separate entry, `@ika.xyz/pre-alpha-core/mock`, so add `@ika.xyz/pre-alpha-core` to
 your dependencies. The package's main entry never imports it: an app that does not import `/mock`
 ships no mock code.
 
@@ -420,7 +464,7 @@ key. The mock prints its network key, its program, its chain number and its netw
 starts:
 
 ```ts
-import { withMockCryptography } from '@ika.xyz/sdk-core/mock';
+import { withMockCryptography } from '@ika.xyz/pre-alpha-core/mock';
 
 const ikaClient = new IkaClient(
 	withMockCryptography({
@@ -454,14 +498,14 @@ Both entry points load in a page. Neither imports anything from Node.
 - The readers take a `getAccount(address)` function, not an RPC client, so any Solana RPC client
   that runs in a browser can back them. Solana's public RPC endpoints answer browsers, but they are
   rate-limited and meant for light use. A production app uses its RPC provider's endpoint.
-- Send requests to the validators through the browser client of `@ika.xyz/sdk-core/web`. Pass it to
+- Send requests to the validators through the browser client of `@ika.xyz/pre-alpha-core/web`. Pass it to
   `readSolanaNetworkKeyOutputVerified(programId, getAccount, crossCheck, network, validators, networkKeyId)` as
   `validators`: the read checks the served outputs against the network key's account on Solana, so
   the check holds whichever server answered.
 - `solanaCommitteeReader` is for the Node client only. The browser client refuses a
   `committeeReader`, because pinning a connection to the committee needs a raw TLS connection, which
   a browser does not give a page. What a browser trusts its endpoint for instead is in the README of
-  `@ika.xyz/sdk-core`, under "In a browser".
+  `@ika.xyz/pre-alpha-core`, under "In a browser".
 - `./instructions` imports `Buffer` from the npm `buffer` package, by name, and returns
   `@solana/web3.js` 1.x instructions. A bundler must resolve `buffer` to the npm package, not to
   Node's module of the same name. The multisig demo (`examples/multisig/react`) does
@@ -487,14 +531,14 @@ Both entry points load in a page. Neither imports anything from Node.
 
 ```bash
 pnpm install
-pnpm --filter @ika.xyz/sdk-core build
-pnpm --filter @ika.xyz/sdk-solana build
-pnpm --filter @ika.xyz/sdk-solana typecheck
-pnpm --filter @ika.xyz/sdk-solana test
+pnpm --filter @ika.xyz/pre-alpha-core build
+pnpm --filter @ika.xyz/pre-alpha-solana build
+pnpm --filter @ika.xyz/pre-alpha-solana typecheck
+pnpm --filter @ika.xyz/pre-alpha-solana test
 ```
 
 `build` writes `dist/esm`: esbuild transpiles each source file, and `tsc` writes the declarations.
-`typecheck` type-checks the source and the tests together. The tests import `@ika.xyz/sdk-core` by
+`typecheck` type-checks the source and the tests together. The tests import `@ika.xyz/pre-alpha-core` by
 name, so build the core first.
 
 The package is ES modules only.

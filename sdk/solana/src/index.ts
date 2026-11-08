@@ -11,23 +11,24 @@
  * program's tests and the node read.
  *
  * What is NOT here is the request format. A dWallet request is the same on
- * every chain, and it is defined once, in `@ika.xyz/sdk-core` — import
+ * every chain, and it is defined once, in `@ika.xyz/pre-alpha-core` — import
  * `SignedRequestDataBcs`, `signGrpcRequest` and `grpcSessionIdentifier`
- * from there, and `DWalletGrpcClient` from `@ika.xyz/sdk-core/client`. This package used to carry a second copy
+ * from there, and `DWalletGrpcClient` from `@ika.xyz/pre-alpha-core/client`. This package used to carry a second copy
  * of that schema; the copy had drifted, so requests built through it
  * serialized to bytes no validator accepts.
  *
  * The instruction builders are NOT here. They are the one part of this
  * package that is not plain bytes — they build `@solana/web3.js`
  * transaction instructions — so they are a subpath,
- * `@ika.xyz/sdk-solana/instructions`, and importing that
+ * `@ika.xyz/pre-alpha-solana/instructions`, and importing that
  * subpath is what requires the peer dependency. Everything this file
  * exports resolves with nothing installed but `@noble`, `@mysten/bcs` and
- * the core, `@ika.xyz/sdk-core`.
+ * the core, `@ika.xyz/pre-alpha-core`.
  */
 
 export * from './accounts.js';
 export * from './addresses.js';
+export * from './gas-deposits.js';
 export * from './network-key-output.js';
 export * from './read-cross-check.js';
 export * from './record-checks.js';

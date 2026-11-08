@@ -4,7 +4,7 @@
 /**
  * What a demo asks the ika network, through the SDK, as an app asks it.
  *
- * `IkaClient` from `@ika.xyz/sdk-solana/web3` sends the requests over gRPC
+ * `IkaClient` from `@ika.xyz/pre-alpha-solana/web3` sends the requests over gRPC
  * and reads the ika program's accounts. `IkaTransaction` adds the program's
  * instructions to a transaction the payer signs. `UserShareEncryptionKeys`
  * holds the user's keys: the key the user's share is encrypted to, and the
@@ -12,7 +12,7 @@
  *
  * The Solana devnet pre-alpha runs on a mock ika network. One backend holds
  * an ordinary key for each dWallet and signs with it alone, so the SDK runs
- * in mock mode (`withMockCryptography` from `@ika.xyz/sdk-core/mock`). Mock
+ * in mock mode (`withMockCryptography` from `@ika.xyz/pre-alpha-core/mock`). Mock
  * mode skips the user's half of the 2PC-MPC computation and keeps every
  * other check. Against the real network, build the client without
  * `withMockCryptography`; nothing else in the demos changes.
@@ -20,10 +20,10 @@
  * Every request names the epoch the dWallet coordinator account shows. The
  * SDK reads it from the chain before each request.
  */
-import { DWalletGrpcClient as NodeGrpcClient } from '@ika.xyz/sdk-core/client';
-import { withMockCryptography } from '@ika.xyz/sdk-core/mock';
-import { DWalletGrpcClient as WebGrpcClient } from '@ika.xyz/sdk-core/web';
-import { dwalletCoordinatorPda, readDWalletCoordinator } from '@ika.xyz/sdk-solana';
+import { DWalletGrpcClient as NodeGrpcClient } from '@ika.xyz/pre-alpha-core/client';
+import { withMockCryptography } from '@ika.xyz/pre-alpha-core/mock';
+import { DWalletGrpcClient as WebGrpcClient } from '@ika.xyz/pre-alpha-core/web';
+import { dwalletCoordinatorPda, readDWalletCoordinator } from '@ika.xyz/pre-alpha-solana';
 import {
 	Curve,
 	Hash,
@@ -32,8 +32,8 @@ import {
 	PresignExpiredWithTheEpoch,
 	SignatureAlgorithm,
 	UserShareEncryptionKeys,
-} from '@ika.xyz/sdk-solana/web3';
-import type { DWallet, Presign } from '@ika.xyz/sdk-solana/web3';
+} from '@ika.xyz/pre-alpha-solana/web3';
+import type { DWallet, Presign } from '@ika.xyz/pre-alpha-solana/web3';
 import { Connection, Keypair, PublicKey, Transaction } from '@solana/web3.js';
 
 import { confirmByPolling } from './helpers.ts';

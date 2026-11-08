@@ -15,6 +15,7 @@ import { TransactionResponseDataBcs } from './bcs.js';
 import { decodeResponse, encodeRequest } from './messages.js';
 import type { NetworkKeyId } from './network-key-id.js';
 import { latestNetworkKeyIdOf, networkKeyIdFromBytes } from './network-key-id.js';
+import { markRefusalCode, RefusalCode } from './refusal-code.js';
 import type { DWalletTransport } from './transport.js';
 import {
 	beforeDeadline,
@@ -134,8 +135,8 @@ function everyValidatorRefused(last: unknown): Error {
 
 /**
  * The client's calls, over the transport an entry point gives it. Import
- * `DWalletGrpcClient` from `@ika.xyz/sdk-core/client` for Node, or from
- * `@ika.xyz/sdk-core/web` for a browser.
+ * `DWalletGrpcClient` from `@ika.xyz/pre-alpha-core/client` for Node, or from
+ * `@ika.xyz/pre-alpha-core/web` for a browser.
  */
 export class DWalletGrpcClientBase {
 	/** The transport every call goes through. */
@@ -330,13 +331,18 @@ export class DWalletGrpcClientBase {
 		};
 		const deadline = Date.now() + timeoutMs;
 		const submitTo = async (index: number): Promise<TransactionResponseData> => {
-			const response: { response_data: Uint8Array } = await this.call(
+			const response: { response_data: Uint8Array; refusal_code?: number } = await this.call(
 				index,
 				'SubmitTransaction',
 				request,
 				deadline,
 			);
-			return TransactionResponseDataBcs.parse(new Uint8Array(response.response_data));
+			const answer = TransactionResponseDataBcs.parse(new Uint8Array(response.response_data));
+			// The refusal code, kept on an `Error` answer beside its sentence.
+			if (answer.$kind === 'Error') {
+				markRefusalCode(answer, response.refusal_code ?? RefusalCode.UNSPECIFIED);
+			}
+			return answer;
 		};
 		// Whether the pinned TLS check refused the key of every validator tried
 		// so far, and the last error a validator gave.
@@ -542,7 +548,7 @@ export class DWalletGrpcClientBase {
 	 * `verifyNetworkKeyOutput` (`./network-key-output.js`) through a chain
 	 * reader, or read them through `readNetworkKeyOutputVerified` of
 	 * `@ika.xyz/sdk-sui` or `readSolanaNetworkKeyOutputVerified` of
-	 * `@ika.xyz/sdk-solana`, before treating them as trusted input.
+	 * `@ika.xyz/pre-alpha-solana`, before treating them as trusted input.
 	 */
 	async getNetworkKeyOutput(networkKeyIdentifier: Uint8Array): Promise<NetworkKeyOutput> {
 		const deadline = Date.now() + READ_TIMEOUT_MS;

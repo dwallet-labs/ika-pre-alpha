@@ -31,15 +31,15 @@
  * transaction. Add your own instructions with `add`, so they are measured
  * too.
  */
-import { fromCurveToNumber } from '@ika.xyz/sdk-core';
-import type { Curve, Hash, SignatureAlgorithm } from '@ika.xyz/sdk-core';
-import type { DWallet, UserShareEncryptionKeys } from '@ika.xyz/sdk-core/common';
+import { fromCurveToNumber } from '@ika.xyz/pre-alpha-core';
+import type { Curve, Hash, SignatureAlgorithm } from '@ika.xyz/pre-alpha-core';
+import type { DWallet, UserShareEncryptionKeys } from '@ika.xyz/pre-alpha-core/common';
 import {
 	holderKeypair,
 	requestKeypair,
 	signatureSchemeNumber,
 	signatureSchemeOf,
-} from '@ika.xyz/sdk-core/common';
+} from '@ika.xyz/pre-alpha-core/common';
 import {
 	Keypair,
 	PACKET_DATA_SIZE,
@@ -52,15 +52,24 @@ import type { AddressLookupTableAccount, TransactionInstruction } from '@solana/
 
 import { approvalMessageDigests, gasDepositPda } from '../addresses.js';
 import {
+	checkDepositLife,
+	checkMinFirstDeposit,
+	checkMinTopUp,
+	checkTransferAllowed,
+	GasDepositAlreadyOpenError,
+} from '../gas-deposits.js';
+import {
 	acceptEncryptedUserShareInstructions,
 	createDepositInstructions,
 	issueFutureSignatureVoucherInstruction,
 	issueSignatureVoucherInstruction,
 	registerEncryptionKeyInstructions,
+	requestWithdrawInstruction,
 	revokeSignatureVoucherInstruction,
 	setVoucherSigningKeyInstruction,
 	signEncryptionKeyRegistration,
 	topUpInstruction,
+	transferGasDepositInstruction,
 	transferOwnershipInstruction,
 } from '../instructions.js';
 import type { IkaClient } from './ika-client.js';
@@ -75,6 +84,7 @@ export type IkaTransactionClient = Pick<
 	| 'chainNumber'
 	| 'networkValue'
 	| 'getDWalletCoordinator'
+	| 'getGasDeposit'
 	| 'getRequestPublicKey'
 	| 'checkDWalletUsable'
 	| 'getDWalletAddress'
@@ -238,9 +248,14 @@ export class IkaTransaction {
 	}
 
 	/**
-	 * Create a gas deposit owned by the owner, who can withdraw from it. Every
-	 * request its request key signs is charged to it: fund it with
-	 * `topUpGasDeposit`, in the same transaction or later.
+	 * Create an empty gas deposit owned by the owner, who alone asks for its
+	 * withdrawal. Every request its request key signs is charged to it.
+	 *
+	 * The program refuses an empty deposit while the network's minimum first
+	 * deposit is above zero in either coin, or while the deposit fee is above
+	 * zero: this method sends no SOL, so it pays no fee.
+	 * `createFundedGasDeposit` funds the deposit as it creates it, pays the
+	 * fee, and checks the minimum first.
 	 *
 	 * The request key must consent to the owner. With no arguments it is the
 	 * keys' request key, which consents here. For another key, such as a
@@ -250,28 +265,108 @@ export class IkaTransaction {
 	createGasDeposit(
 		consented: { requestPublicKey: Uint8Array; consent: Uint8Array } | undefined = undefined,
 	): IkaTransaction {
+		this.#add(...this.#createDeposit(consented));
+		return this;
+	}
+
+	/**
+	 * Create a gas deposit owned by the owner, funded as it is created with
+	 * IKA from the payer's token account `ikaTokenAccount` and SOL from the
+	 * payer. Amounts are in IKA base units (10^-8 IKA) and lamports, and they
+	 * are what the deposit is CREDITED: the network's deposit fee is read
+	 * from the coordinator and added to the SOL the payer sends, so the payer
+	 * pays `solAmount` plus the fee.
+	 *
+	 * The same call reopens a closed deposit as its next life. This reads the
+	 * deposit first: with none it opens incarnation 1, with a closed one the
+	 * closed deposit's incarnation plus one, and it throws
+	 * `GasDepositAlreadyOpenError` for an open or pending one. A `consented`
+	 * proof must name that life: `IkaClient.signGasDepositConsent` signs the
+	 * first, `IkaClient.signGasDepositReopenConsent` a later one. With no
+	 * `consented`, the keys' request key signs the right one here.
+	 *
+	 * The network sets a minimum first deposit on the coordinator. This reads
+	 * it first, and throws `GasDepositBelowMinimumError`, which names the
+	 * minimum, for credited amounts the program would refuse in either coin.
+	 */
+	async createFundedGasDeposit(params: {
+		ikaTokenAccount: PublicKey;
+		ikaAmount: bigint;
+		solAmount: bigint;
+		consented?: { requestPublicKey: Uint8Array; consent: Uint8Array };
+	}): Promise<IkaTransaction> {
+		const requestPublicKey =
+			params.consented?.requestPublicKey ??
+			this.#ikaClient.getRequestPublicKey(this.#requireKeys());
+		const deposit = await this.#ikaClient.getGasDeposit(requestPublicKey);
+		if (deposit !== null && !deposit.closed) {
+			throw new GasDepositAlreadyOpenError(deposit.incarnation, deposit.withdrawalPending);
+		}
+		const incarnation = deposit === null ? 1n : deposit.incarnation + 1n;
+		const { treasuryVault, minFirstDeposit, depositFee } =
+			await this.#ikaClient.getDWalletCoordinator();
+		checkMinFirstDeposit({ ika: params.ikaAmount, sol: params.solAmount }, minFirstDeposit);
 		this.#add(
-			...createDepositInstructions({
-				programId: this.#ikaClient.programId,
-				sender: this.#owner,
-				payer: this.#payer,
-				requestKey:
-					consented === undefined
-						? requestKeypair(this.#requireKeys())
-						: { publicKey: consented.requestPublicKey, proofOfPossession: consented.consent },
-				chainNumber: this.#ikaClient.chainNumber,
-				network: this.#ikaClient.networkValue,
-			}),
+			...this.#createDeposit(
+				params.consented,
+				{
+					ikaTokenAccount: params.ikaTokenAccount,
+					treasuryVault: new PublicKey(treasuryVault),
+					ikaAmount: params.ikaAmount,
+					solAmount: params.solAmount + depositFee.sol,
+				},
+				depositFee.sol > 0n ? new PublicKey(depositFee.recipient) : undefined,
+				incarnation,
+			),
 		);
 		return this;
+	}
+
+	#createDeposit(
+		consented: { requestPublicKey: Uint8Array; consent: Uint8Array } | undefined,
+		funding?: {
+			ikaTokenAccount: PublicKey;
+			treasuryVault: PublicKey;
+			ikaAmount: bigint;
+			solAmount: bigint;
+		},
+		feeRecipient?: PublicKey,
+		incarnation?: bigint,
+	): TransactionInstruction[] {
+		return createDepositInstructions({
+			programId: this.#ikaClient.programId,
+			sender: this.#owner,
+			payer: this.#payer,
+			requestKey:
+				consented === undefined
+					? requestKeypair(this.#requireKeys())
+					: { publicKey: consented.requestPublicKey, proofOfPossession: consented.consent },
+			chainNumber: this.#ikaClient.chainNumber,
+			network: this.#ikaClient.networkValue,
+			funding,
+			feeRecipient,
+			incarnation,
+		});
 	}
 
 	/**
 	 * Add IKA, from the payer's token account `ikaTokenAccount`, and SOL, from
 	 * the payer, to the gas deposit of `requestPublicKey`: any key's, so an
 	 * app can fund its users' deposits. It defaults to the key that signs
-	 * this client's requests for the keys. Amounts are in the token's and
-	 * SOL's base units.
+	 * this client's requests for the keys. Amounts are in IKA base units
+	 * (10^-8 IKA) and lamports, and they are what the deposit is CREDITED:
+	 * the network's deposit fee is read from the coordinator and added to the
+	 * SOL the payer sends, so an IKA-only top-up sends exactly the fee.
+	 *
+	 * The network's minimum first deposit is a total: the deposit after the
+	 * top-up, net of its debt, must reach it in each coin. This reads the
+	 * deposit and the minimum first, and throws `GasDepositBelowMinimumError`,
+	 * which names the minimum, for a top-up the program would refuse. It
+	 * throws for a key with no deposit: create one with
+	 * `createFundedGasDeposit`. It throws `GasDepositClosedError` for a closed
+	 * deposit, which only a create reopens. A top-up names no life: it lands
+	 * on whatever life is open when it executes. A top-up while a withdrawal
+	 * is pending is paid out with the rest of the deposit.
 	 */
 	async topUpGasDeposit(params: {
 		ikaTokenAccount: PublicKey;
@@ -279,25 +374,130 @@ export class IkaTransaction {
 		solAmount: bigint;
 		requestPublicKey?: Uint8Array;
 	}): Promise<IkaTransaction> {
-		const { programId } = this.#ikaClient;
-		const { treasuryVault } = await this.#ikaClient.getDWalletCoordinator();
+		const requestPublicKey =
+			params.requestPublicKey ?? this.#ikaClient.getRequestPublicKey(this.#requireKeys());
+		const deposit = await this.#ikaClient.getGasDeposit(requestPublicKey);
+		if (deposit === null) {
+			throw new Error(
+				'the request key has no gas deposit; create one with createFundedGasDeposit first',
+			);
+		}
+		checkDepositLife(deposit, 'top up');
+		const { treasuryVault, minFirstDeposit, minBalance, depositFee } =
+			await this.#ikaClient.getDWalletCoordinator();
+		checkMinTopUp({ ika: params.ikaAmount, sol: params.solAmount }, minBalance);
+		checkMinFirstDeposit(
+			{
+				ika: deposit.ikaBalance + params.ikaAmount - deposit.ikaDebt,
+				sol: deposit.solBalance + params.solAmount - deposit.solDebt,
+			},
+			minFirstDeposit,
+		);
 		this.#add(
 			topUpInstruction({
-				programId,
-				deposit: new PublicKey(
-					gasDepositPda(
-						programId.toBytes(),
-						params.requestPublicKey ?? this.#ikaClient.getRequestPublicKey(this.#requireKeys()),
-					).address,
-				),
+				programId: this.#ikaClient.programId,
+				deposit: this.#depositOf(requestPublicKey),
 				payer: this.#payer,
 				ikaTokenAccount: params.ikaTokenAccount,
 				treasuryVault: new PublicKey(treasuryVault),
 				ikaAmount: params.ikaAmount,
-				solAmount: params.solAmount,
+				solAmount: params.solAmount + depositFee.sol,
+				feeRecipient: depositFee.sol > 0n ? new PublicKey(depositFee.recipient) : undefined,
 			}),
 		);
 		return this;
+	}
+
+	/**
+	 * Ask for the whole gas deposit of `requestPublicKey`, as its owner. It
+	 * defaults to the key that signs this client's requests for the keys.
+	 *
+	 * The request takes no amount. The network pays the deposit out with its
+	 * own transaction, once every request it accepted on the deposit is
+	 * charged. It takes its charge first, then sends what is left after
+	 * debt: the SOL to the owner, and the IKA to `ikaDestination`, an open
+	 * token account of the IKA mint. There is no claim step. The request is
+	 * final: there is no cancel, and a second request while one is pending
+	 * is refused. A payout that pays everything closes the deposit, and an
+	 * owner who wants to keep spending reopens it with a create.
+	 *
+	 * `incarnation` is the deposit's life the request is for; the program
+	 * refuses another one. This reads the deposit first. Omitted, the
+	 * request names the open life it reads. It throws for a key with no
+	 * deposit, `GasDepositClosedError` for a closed deposit, and
+	 * `GasDepositIncarnationMismatchError` when `incarnation` is not the open
+	 * life.
+	 */
+	async requestGasWithdrawal(params: {
+		ikaDestination: PublicKey;
+		incarnation?: bigint;
+		requestPublicKey?: Uint8Array;
+	}): Promise<IkaTransaction> {
+		const requestPublicKey =
+			params.requestPublicKey ?? this.#ikaClient.getRequestPublicKey(this.#requireKeys());
+		const deposit = await this.#ikaClient.getGasDeposit(requestPublicKey);
+		if (deposit === null) {
+			throw new Error('the request key has no gas deposit');
+		}
+		checkDepositLife(deposit, 'request', params.incarnation);
+		this.#add(
+			requestWithdrawInstruction({
+				programId: this.#ikaClient.programId,
+				owner: this.#owner,
+				deposit: this.#depositOf(requestPublicKey),
+				ikaDestination: params.ikaDestination,
+				incarnation: deposit.incarnation,
+			}),
+		);
+		return this;
+	}
+
+	/**
+	 * Hand the gas deposit of `requestPublicKey` to `newOwner`, as its owner.
+	 * It defaults to the key that signs this client's requests for the keys.
+	 * The new owner alone asks for its withdrawal from then on.
+	 *
+	 * A withdrawal request is final, and the program refuses a transfer while
+	 * one is pending. The client reads the deposit first and throws
+	 * `TransferWhileWithdrawalPendingError` for such a transfer. It throws
+	 * for a key with no deposit, and `GasDepositClosedError` for a closed
+	 * one. `incarnation`, the life the transfer is for, defaults to the open
+	 * life it reads; another one throws `GasDepositIncarnationMismatchError`.
+	 */
+	async transferGasDeposit(params: {
+		newOwner: PublicKey;
+		incarnation?: bigint;
+		requestPublicKey?: Uint8Array;
+	}): Promise<IkaTransaction> {
+		const requestPublicKey =
+			params.requestPublicKey ?? this.#ikaClient.getRequestPublicKey(this.#requireKeys());
+		const deposit = await this.#ikaClient.getGasDeposit(requestPublicKey);
+		if (deposit === null) {
+			throw new Error('the request key has no gas deposit');
+		}
+		checkDepositLife(deposit, 'transfer', params.incarnation);
+		checkTransferAllowed(deposit);
+		this.#add(
+			transferGasDepositInstruction({
+				programId: this.#ikaClient.programId,
+				owner: this.#owner,
+				deposit: this.#depositOf(requestPublicKey),
+				newOwner: params.newOwner,
+				incarnation: deposit.incarnation,
+			}),
+		);
+		return this;
+	}
+
+	/** The gas deposit of `requestPublicKey`, or of the keys' request key. */
+	#depositOf(requestPublicKey: Uint8Array | undefined): PublicKey {
+		const { programId } = this.#ikaClient;
+		return new PublicKey(
+			gasDepositPda(
+				programId.toBytes(),
+				requestPublicKey ?? this.#ikaClient.getRequestPublicKey(this.#requireKeys()),
+			).address,
+		);
 	}
 
 	/**

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 
 /**
- * The mock cryptography ships only in `@ika.xyz/sdk-core/mock`. No other
+ * The mock cryptography ships only in `@ika.xyz/pre-alpha-core/mock`. No other
  * entry of the package imports it, directly or through another module, so an
  * app that does not import `/mock` has no mock code in its bundle.
  *

@@ -16,22 +16,22 @@ needs an SDK. A Solana program that controls dWallets needs a CPI crate. Most pr
 
 ## An app in TypeScript
 
-The SDK is two packages, `@ika.xyz/sdk-core` and `@ika.xyz/sdk-solana`. They are on npm under the
+The SDK is two packages, `@ika.xyz/pre-alpha-core` and `@ika.xyz/pre-alpha-solana`. They are on npm under the
 `pre-alpha` tag, which keeps them apart from any other release:
 
 ```bash
-npm install @ika.xyz/sdk-core@pre-alpha @ika.xyz/sdk-solana@pre-alpha @solana/web3.js
+npm install @ika.xyz/pre-alpha-core@pre-alpha @ika.xyz/pre-alpha-solana@pre-alpha @solana/web3.js
 ```
 
-They bring in `@ika.xyz/ika-wasm`, the compiled crypto package, at its pre-alpha version. To build the
+They bring in `@ika.xyz/pre-alpha-wasm`, the compiled crypto package, at its pre-alpha version. To build the
 SDK from source instead, clone this repository and run `pnpm install && pnpm build` at its root.
 
-`@ika.xyz/sdk-solana` has two entry points. `@ika.xyz/sdk-solana/web3` works with `@solana/web3.js`,
-and `@ika.xyz/sdk-solana/kit` works with `@solana/kit`. The kit entry point also needs
+`@ika.xyz/pre-alpha-solana` has two entry points. `@ika.xyz/pre-alpha-solana/web3` works with `@solana/web3.js`,
+and `@ika.xyz/pre-alpha-solana/kit` works with `@solana/kit`. The kit entry point also needs
 `@solana/web3.js` installed, because the SDK builds its instructions with it.
 
-`@ika.xyz/sdk-core` is listed on its own because the pre-alpha's mock mode comes from it, as
-`@ika.xyz/sdk-core/mock`. See [the TypeScript SDK](../frameworks/typescript.md).
+`@ika.xyz/pre-alpha-core` is listed on its own because the pre-alpha's mock mode comes from it, as
+`@ika.xyz/pre-alpha-core/mock`. See [the TypeScript SDK](../frameworks/typescript.md).
 
 ## A Solana program
 

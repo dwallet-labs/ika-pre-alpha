@@ -14,19 +14,19 @@
  *
  * The copy is gone and this package now has no request format of its own.
  * What it keeps is this test, which asserts that the one definition in
- * `@ika.xyz/sdk-core` still produces the exact bytes the Rust type produces.
+ * `@ika.xyz/pre-alpha-core` still produces the exact bytes the Rust type produces.
  * The network's Rust code asserts the same value from the other side, so the two cannot drift apart without one of them failing.
  *
  * The core is imported by name, the way anything outside this repository
  * would import it. It is a workspace dependency, so the name resolves to the
  * core's build in this repository: build it first
- * (`pnpm --filter @ika.xyz/sdk-core build`).
+ * (`pnpm --filter @ika.xyz/pre-alpha-core build`).
  */
 import {
 	DWalletRequestBcs,
 	SignedRequestDataBcs,
 	VersionedDWalletDataAttestationBcs,
-} from '@ika.xyz/sdk-core';
+} from '@ika.xyz/pre-alpha-core';
 import { describe, expect, it } from 'vitest';
 
 const filled = (length: number, byte: number) => Array.from(new Uint8Array(length).fill(byte));
@@ -37,6 +37,7 @@ const SIGN_REQUEST = {
 	epoch: 7n,
 	chain_id: { Solana: null },
 	network: 3,
+	deposit_incarnation: 2n,
 	intended_chain_sender: filled(32, 0x55),
 	request: {
 		Sign: {
@@ -61,6 +62,7 @@ const VECTOR =
 	'0700000000000000' + // epoch, little-endian
 	'00' + // chain_id: Solana is variant 0
 	'03' + // network: a local network
+	'0200000000000000' + // deposit_incarnation: life 2, little-endian
 	'20' +
 	'5555555555555555555555555555555555555555555555555555555555555555' +
 	'01' + // request: Sign is variant 1
@@ -97,6 +99,7 @@ describe('a signing request', () => {
 		const bytes = Uint8Array.from(Buffer.from(VECTOR, 'hex'));
 		const parsed = SignedRequestDataBcs.parse(bytes);
 		expect(parsed.epoch).toBe('7');
+		expect(parsed.deposit_incarnation).toBe('2');
 		expect(parsed.chain_id.$kind).toBe('Solana');
 		expect(parsed.request.$kind).toBe('Sign');
 		const sign = parsed.request.Sign!;

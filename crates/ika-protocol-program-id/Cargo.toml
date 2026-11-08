@@ -7,9 +7,9 @@ publish.workspace = true
 edition.workspace = true
 description = "The ika protocol program's address on each network: the one place it is written"
 
-# One network feature picks the address. The protocol program and the three
-# program SDK crates (ika-dwallet-pinocchio, -native, -anchor) forward these
-# same features here, so a build names its network once.
+# One network feature picks the address. The program SDK crates
+# (ika-dwallet-pinocchio, -native and -anchor) forward these same features
+# here, so a build names its network once.
 [features]
 default = []
 devnet-pre-alpha = []

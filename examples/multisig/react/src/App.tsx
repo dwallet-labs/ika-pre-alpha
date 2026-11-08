@@ -12,13 +12,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import '@solana/wallet-adapter-react-ui/styles.css';
 
-import { SIGNATURE_SCHEME_EDDSA_SHA512 } from '@ika.xyz/sdk-solana';
+import { SIGNATURE_SCHEME_EDDSA_SHA512 } from '@ika.xyz/pre-alpha-solana';
 import {
 	IkaTransaction,
 	type DWallet,
 	type IkaClient,
 	type UserShareEncryptionKeys,
-} from '@ika.xyz/sdk-solana/web3';
+} from '@ika.xyz/pre-alpha-solana/web3';
 
 import {
 	connectToIka,

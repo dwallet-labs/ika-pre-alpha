@@ -134,7 +134,7 @@ export type CheckedEncryptedShareRecord = AttestationRecord & {
  * the record holds none, the one the caller gave. The chain packages'
  * readers do this (`dwalletShareReader` in `@ika.xyz/sdk-sui`, with
  * `verifySuiDWalletRecord`, `verifySuiEncryptedShareRecord` and
- * `verifySuiPublicShareRecord`; `dwalletShareReader` in `@ika.xyz/sdk-solana`,
+ * `verifySuiPublicShareRecord`; `dwalletShareReader` in `@ika.xyz/pre-alpha-solana`,
  * with `verifySolanaEncryptedShareRecord`). A reader built by hand must run
  * the same checks: the core cannot, because they are chain code.
  *
@@ -1221,7 +1221,7 @@ async function decryptedShare(
  * attestation (`shareAttestationDigest`), which is the digest the share's
  * chain record stores. Pass the result to the chain client's accept builder:
  * `acceptEncryptedUserShareTx` in `@ika.xyz/sdk-sui`, or
- * `acceptEncryptedUserShareInstructions` in `@ika.xyz/sdk-solana`. Any key
+ * `acceptEncryptedUserShareInstructions` in `@ika.xyz/pre-alpha-solana`. Any key
  * may send that transaction and pay for it.
  *
  * A new holder has no acceptance of its own yet, so it relies on the

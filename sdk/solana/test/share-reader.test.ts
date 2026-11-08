@@ -18,7 +18,7 @@ import {
 	VersionedEncryptedUserKeyShareAttestationBcs,
 	type AttestationKind,
 	type AttestationRecord,
-} from '@ika.xyz/sdk-core';
+} from '@ika.xyz/pre-alpha-core';
 import { ed25519 } from '@noble/curves/ed25519.js';
 import { keccak_256 } from '@noble/hashes/sha3.js';
 import { describe, expect, it } from 'vitest';

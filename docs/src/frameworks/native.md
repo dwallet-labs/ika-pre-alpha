@@ -24,7 +24,8 @@ program's address as `ID`. Pick the network with a feature of the crate:
 
 | Feature | Network |
 |---|---|
-| `devnet-pre-alpha` | the Solana devnet pre-alpha, ika program `CqGtQgrYFUhobuknomFNntwoxCgKGkBRUtemgdPuM9qT` |
+| `devnet-pre-alpha` | the Solana devnet pre-alpha, ika program `8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv` |
+| `localnet` | a local validator running the localnet ika program, as the local mock does |
 | none | the test suites only, which load the ika program at a fixed development address |
 
 Other network features exist for networks not deployed yet. Only one feature can be on.
