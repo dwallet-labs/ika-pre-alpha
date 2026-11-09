@@ -138,5 +138,5 @@ const signature = await ikaClient.requestSign({ dWallet, signatureVoucherId: vou
   feature, `issue_signature_voucher`, the rules a program must follow, and testing.
 
 The full guide is the book in `docs/` of https://github.com/dwallet-labs/ika-pre-alpha. The
-TypeScript SDK is in `sdk/` there, and is on npm under the `pre-alpha` tag: `npm install @ika.xyz/pre-alpha-core@pre-alpha @ika.xyz/pre-alpha-solana@pre-alpha @solana/web3.js`. The working
+TypeScript SDK is in `sdk/` there, and is on npm: `npm install @ika.xyz/pre-alpha-core @ika.xyz/pre-alpha-solana @solana/web3.js`. The working
 examples are `examples/voting` and `examples/multisig`.
