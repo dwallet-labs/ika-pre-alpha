@@ -53,10 +53,10 @@ Get devnet SOL from <https://faucet.solana.com>. The devnet RPC faucet is closed
 
 ## Quick start: an app
 
-The SDK is on npm under the `pre-alpha` tag:
+The SDK is on npm:
 
 ```bash
-npm install @ika.xyz/pre-alpha-core@pre-alpha @ika.xyz/pre-alpha-solana@pre-alpha @solana/web3.js
+npm install @ika.xyz/pre-alpha-core @ika.xyz/pre-alpha-solana @solana/web3.js
 ```
 
 Then create a client in mock mode, make a dWallet and sign:

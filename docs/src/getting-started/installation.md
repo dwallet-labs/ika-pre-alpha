@@ -16,14 +16,14 @@ needs an SDK. A Solana program that controls dWallets needs a CPI crate. Most pr
 
 ## An app in TypeScript
 
-The SDK is two packages, `@ika.xyz/pre-alpha-core` and `@ika.xyz/pre-alpha-solana`. They are on npm under the
-`pre-alpha` tag, which keeps them apart from any other release:
+The SDK is two packages, `@ika.xyz/pre-alpha-core` and `@ika.xyz/pre-alpha-solana`. The package names say they are
+the pre-alpha, so they install like any other package:
 
 ```bash
-npm install @ika.xyz/pre-alpha-core@pre-alpha @ika.xyz/pre-alpha-solana@pre-alpha @solana/web3.js
+npm install @ika.xyz/pre-alpha-core @ika.xyz/pre-alpha-solana @solana/web3.js
 ```
 
-They bring in `@ika.xyz/pre-alpha-wasm`, the compiled crypto package, at its pre-alpha version. To build the
+They bring in `@ika.xyz/pre-alpha-wasm`, the compiled crypto package. To build the
 SDK from source instead, clone this repository and run `pnpm install && pnpm build` at its root.
 
 `@ika.xyz/pre-alpha-solana` has two entry points. `@ika.xyz/pre-alpha-solana/web3` works with `@solana/web3.js`,
