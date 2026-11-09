@@ -60,7 +60,7 @@ pub const DISC_FUTURE_SIGNATURE_VOUCHER: u8 = 109;
 
 // ── Account lengths: the tag, the version, then the fields ──
 
-pub const COORDINATOR_LEN: usize = 2 + 629;
+pub const COORDINATOR_LEN: usize = 2 + 725;
 pub const NETWORK_ENCRYPTION_KEY_LEN: usize = 2 + 197;
 pub const DWALLET_LEN: usize = 2 + 183;
 pub const SIGNATURE_VOUCHER_LEN: usize = 2 + 302;
